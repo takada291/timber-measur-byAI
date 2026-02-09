@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>物体検知プロトタイプ</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #f0f0f0;
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 {
+            font-size: 1.2rem;
+            margin: 10px;
+            color: #333;
+        }
+        #container {
+            position: relative;
+            width: 100%;
+            max-width: 640px;
+            margin: 0 auto;
+        }
+        /* ビデオとキャンバスを重ねるための設定 */
+        video {
+            width: 100%;
+            height: auto;
+            display: block;
+            transform: scaleX(1); /* インカメラの場合は-1で反転 */
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+        }
+        #status {
+            padding: 10px;
+            background: #fff;
+            width: 100%;
+            text-align: center;
+            font-weight: bold;
+            color: dimgray;
+        }
+        button {
+            margin: 10px;
+            padding: 10px 20px;
+            font-size: 1rem;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>物体検知テスト（COCO-SSD）</h1>
+    <div id="status">AIモデルを読み込み中...<br>（初回は少し時間がかかります）</div>
+    
+    <div id="container">
+        <video id="webcam" autoplay playsinline muted></video>
+        <canvas id="overlay"></canvas>
+    </div>
+
+    <button onclick="switchCamera()">カメラ切替</button>
+
+<script>
+    const video = document.getElementById('webcam');
+    const canvas = document.getElementById('overlay');
+    const ctx = canvas.getContext('2d');
+    const statusDiv = document.getElementById('status');
+    
+    let model; // AIモデルを格納する変数
+    let currentStream; // カメラストリーム
+    let facingMode = "environment"; // 初期は背面カメラ（environment）
+
+    // 1. メイン処理の開始
+    async function main() {
+        try {
+            // AIモデルのロード
+            statusDiv.innerText = "AIモデルをロード中...";
+            model = await cocoSsd.load();
+            statusDiv.innerText = "カメラを起動中...";
+
+            // カメラのセットアップ
+            await setupCamera();
+            
+            // 検知ループの開始
+            detectFrame();
+            
+            statusDiv.innerText = "検知中：身の回りの物を映してください（人、コップ、スマホなど）";
+        } catch (error) {
+            console.error(error);
+            statusDiv.innerText = "エラーが発生しました: " + error.message;
+        }
+    }
+
+    // 2. カメラの設定
+    async function setupCamera() {
+        if (currentStream) {
+            currentStream.getTracks().forEach(track => track.stop());
+        }
+
+        const constraints = {
+            video: {
+                facingMode: facingMode,
+                width: { ideal: 640 },
+                height: { ideal: 480 }
+            },
+            audio: false
+        };
+
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        video.srcObject = stream;
+        currentStream = stream;
+
+        return new Promise((resolve) => {
+            video.onloadedmetadata = () => {
+                // ビデオのサイズに合わせてキャンバスのサイズを調整
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                resolve(video);
+            };
+        });
+    }
+
+    // 3. カメラ切替ボタンの処理
+    async function switchCamera() {
+        facingMode = facingMode === "user" ? "environment" : "user";
+        statusDiv.innerText = "カメラ切り替え中...";
+        await setupCamera();
+        statusDiv.innerText = "検知中";
+    }
+
+    // 4. 物体検知ループ（パラパラ漫画のように繰り返す）
+    async function detectFrame() {
+        // ビデオが再生中でなければ何もしない
+        if (video.readyState !== 4) {
+            requestAnimationFrame(detectFrame);
+            return;
+        }
+
+        // AIによる予測を実行
+        // 戻り値は [{bbox: [x, y, width, height], class: "person", score: 0.9}, ...]
+        const predictions = await model.detect(video);
+
+        // 前のフレームの描画を消す
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 検出されたすべての物体に対して描画
+        predictions.forEach(prediction => {
+            // スコア（確信度）が60%以上のものだけ表示
+            if (prediction.score > 0.6) {
+                const [x, y, width, height] = prediction['bbox'];
+                const text = prediction['class']; // 物体の名前（英語）
+
+                // 枠線を描く
+                ctx.strokeStyle = "#00FFFF"; // 水色
+                ctx.lineWidth = 4;
+                ctx.strokeRect(x, y, width, height);
+
+                // 文字の背景を描く
+                ctx.fillStyle = "#00FFFF";
+                const textWidth = ctx.measureText(text).width;
+                ctx.fillRect(x, y, textWidth + 10, 20);
+
+                // 文字を描く
+                ctx.fillStyle = "#000000";
+                ctx.font = "16px Arial";
+                ctx.fillText(text, x + 5, y + 15);
+            }
+        });
+
+        // 次のフレームで再度この関数を呼ぶ
+        requestAnimationFrame(detectFrame);
+    }
+
+    // 実行開始
+    main();
+
+</script>
+</body>
+</html>
