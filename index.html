@@ -2,192 +2,519 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>物体検知プロトタイプ</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AI検知</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#8b4513">
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="AI検知">
+    <link rel="apple-touch-icon" href="icon-512.png">
+
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+
     <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background-color: #f0f0f0;
-            font-family: sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        h1 {
-            font-size: 1.2rem;
-            margin: 10px;
-            color: #333;
-        }
-        #container {
-            position: relative;
-            width: 100%;
-            max-width: 640px;
-            margin: 0 auto;
-        }
-        /* ビデオとキャンバスを重ねるための設定 */
-        video {
-            width: 100%;
-            height: auto;
-            display: block;
-            transform: scaleX(1); /* インカメラの場合は-1で反転 */
-        }
-        canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 10;
-        }
-        #status {
-            padding: 10px;
-            background: #fff;
-            width: 100%;
-            text-align: center;
-            font-weight: bold;
-            color: dimgray;
-        }
-        button {
-            margin: 10px;
-            padding: 10px 20px;
-            font-size: 1rem;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-        }
+        /* --- 基本スタイル --- */
+        body { font-family: -apple-system, sans-serif; padding: 10px; background: #fdf5e6; color: #333; margin: 0; padding-bottom: 40px; }
+        .card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        
+        .header-area { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #8b4513; margin-bottom: 10px; padding-bottom: 5px; }
+        h2 { margin: 0; font-size: 1.1em; color: #5d4037; }
+        .settings-btn { background: #6c757d; color: white; padding: 6px 12px; font-size: 0.85em; border-radius: 20px; border: none; cursor: pointer; }
+
+        /* --- タブ切り替え --- */
+        .tab-group { display: flex; gap: 5px; margin-bottom: 15px; }
+        .tab-btn { flex: 1; padding: 10px 5px; border: none; border-radius: 8px; font-weight: bold; color: #fff; cursor: pointer; opacity: 0.5; transition: 0.3s; font-size: 0.85em; }
+        .tab-camera { background: #1565c0; } /* 青色 */
+        .tab-voice { background: #8b4513; } /* 茶色 */
+        .tab-calc { background: #2e7d32; }  /* 緑色 */
+        .tab-active { opacity: 1; transform: scale(1.02); box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+
+        /* --- カメラモード用 --- */
+        #camera-container { position: relative; width: 100%; border-radius: 8px; overflow: hidden; background: #000; display: flex; justify-content: center; align-items: center; min-height: 250px; }
+        video { width: 100%; height: auto; display: block; }
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; }
+        .camera-controls { display: flex; justify-content: space-between; margin-top: 10px; gap: 10px; }
+        .btn-ai-start { flex: 2; background: #1565c0; color: white; padding: 12px; border: none; border-radius: 6px; font-weight: bold; font-size: 1rem; }
+        .btn-cam-switch { flex: 1; background: #555; color: white; padding: 12px; border: none; border-radius: 6px; }
+
+        /* --- 共通入力エリア --- */
+        .input-row { margin-bottom: 12px; }
+        .label-group { display: flex; flex-direction: column; margin-bottom: 4px; }
+        .label-group label { font-size: 0.9em; font-weight: bold; color: #5d4037; }
+        .guide-label { font-size: 0.75em; color: #795548; margin-bottom: 2px; }
+        input, select { width: 100%; padding: 12px; border: 1px solid #d7ccc8; border-radius: 6px; font-size: 16px; box-sizing: border-box; background: white; }
+        
+        /* --- 音声モード用 --- */
+        #voiceStatus { font-size: 0.9em; color: white; background: #999; padding: 8px 12px; border-radius: 20px; display: inline-block; margin-bottom: 10px;}
+        .listening { background: #d32f2f !important; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+        .voice-btn-group { display: flex; gap: 8px; margin-top: 15px; }
+        .voice-btn-group button { flex: 1; padding: 15px; border: none; border-radius: 6px; font-weight: bold; color: white; font-size: 1rem; }
+        .btn-mic { background: #8b4513; }
+        .btn-save { background: #5d4037; }
+        .guide-bottom { font-size: 0.8rem; color: #795548; text-align: center; margin-top: 10px; }
+
+        /* --- 電卓モード用 --- */
+        .calc-display-area { background: #eee; padding: 15px; border-radius: 8px; margin-bottom: 10px; text-align: right; border: 2px solid #ccc; }
+        .calc-label { font-size: 0.8rem; color: #666; display: block; text-align: left; }
+        .calc-value { font-size: 2.5rem; font-weight: bold; color: #333; font-family: monospace; }
+        .length-control { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; background: #fff; padding: 5px; border-radius: 8px; border: 1px solid #ddd; }
+        .length-btn { width: 60px; height: 50px; font-size: 1.5rem; background: #f0f0f0; border: 1px solid #ccc; border-radius: 6px; color: #333; }
+        .length-display { flex: 1; text-align: center; font-size: 1.8rem; font-weight: bold; color: #2e7d32; }
+        .numpad { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; }
+        .num-btn { padding: 20px 0; font-size: 1.8rem; border: none; border-radius: 8px; background: white; box-shadow: 0 2px 0 #ccc; color: #333; font-weight: bold; }
+        .num-btn:active { transform: translateY(2px); box-shadow: none; background: #eee; }
+        .btn-clr { background: #ef5350; color: white; }
+        .btn-save-large { grid-column: span 2; background: #2e7d32; color: white; font-size: 1.5rem; }
+        
+        /* --- データ一覧 & 設定 --- */
+        .summary-box { display: flex; justify-content: space-between; background: #efebe9; padding: 10px; border-radius: 8px; margin: 20px 0 10px; font-weight: bold; color: #5d4037; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th, td { border: 1px solid #d7ccc8; padding: 8px 4px; text-align: center; }
+        th { background: #efebe9; }
+        .btn-del { background: #d32f2f; color: white; border: none; padding: 4px 8px; border-radius: 4px; }
+        .export-btn { width: 100%; background: #388e3c; color: white; padding: 12px; border: none; border-radius: 6px; margin-top: 10px; font-size: 1rem; font-weight: bold; }
+
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 99; }
+        .modal-content { background: white; margin: 10% auto; padding: 20px; width: 85%; max-width: 400px; border-radius: 12px; }
+        .close-btn { background: #666; color: white; width: 100%; padding: 10px; border: none; border-radius: 6px; margin-top: 15px; }
     </style>
 </head>
 <body>
 
-    <h1>物体検知テスト（COCO-SSD）</h1>
-    <div id="status">AIモデルを読み込み中...<br>（初回は少し時間がかかります）</div>
-    
-    <div id="container">
-        <video id="webcam" autoplay playsinline muted></video>
-        <canvas id="overlay"></canvas>
+<div class="card">
+    <div class="header-area">
+        <h2>AI検知ツール</h2>
+        <button class="settings-btn" onclick="openSettings()">⚙️ 設定</button>
     </div>
 
-    <button onclick="switchCamera()">カメラ切替</button>
+    <div class="tab-group">
+        <button class="tab-btn tab-camera tab-active" id="tabCamera" onclick="switchMode('camera')">📸 AIカメラ</button>
+        <button class="tab-btn tab-voice" id="tabVoice" onclick="switchMode('voice')">🎙️ 音声</button>
+        <button class="tab-btn tab-calc" id="tabCalc" onclick="switchMode('calc')">🔢 電卓</button>
+    </div>
+
+    <div id="viewCamera">
+        <div id="camera-container">
+            <video id="webcam" autoplay playsinline muted></video>
+            <canvas id="overlay"></canvas>
+            <div id="camStatus" style="position: absolute; color: white; z-index: 20;">カメラ起動待ち...</div>
+        </div>
+        <div class="camera-controls">
+            <button class="btn-ai-start" id="aiStartBtn" onclick="toggleAI()">🚀 AI検知スタート</button>
+            <button class="btn-cam-switch" onclick="switchCamera()">切替</button>
+        </div>
+        <p class="guide-bottom">※現在はテスト用の一般物体検知AIが動きます</p>
+    </div>
+
+    <div id="viewVoice" style="display:none;">
+        <div id="voiceStatus">音声入力：待機中</div>
+        <div class="input-row">
+            <div class="label-group"><span class="guide-label">発音例「しゅるい　すぎ」</span><label>樹種</label></div>
+            <select id="v_treeType" class="tree-selector"></select>
+        </div>
+        <div class="input-row">
+            <div class="label-group"><span class="guide-label">発音例「ながさ　よん」</span><label>材長 (m)</label></div>
+            <input type="number" id="v_length" value="4">
+        </div>
+        <div class="input-row">
+            <div class="label-group"><span class="guide-label">発音例「ちょっけい　さんじゅうろく」</span><label>末口直径 (cm)</label></div>
+            <input type="number" id="v_diameter">
+        </div>
+        <div class="input-row">
+            <div class="label-group"><span class="guide-label">発音例「めも　まがり」</span><label>備考</label></div>
+            <input type="text" id="v_memo">
+        </div>
+        <div class="voice-btn-group">
+            <button class="btn-mic" onclick="toggleMic()">🎤 開始/停止</button>
+            <button class="btn-save" onclick="saveData('voice')">保存</button>
+        </div>
+        <p class="guide-bottom">※「ほぞん」と発音すると登録されます。</p>
+    </div>
+
+    <div id="viewCalc" style="display:none;">
+        <div style="margin-bottom:10px;">
+            <label class="calc-label">樹種を選択</label>
+            <select id="c_treeType" class="tree-selector" style="font-size:1.2rem; padding:10px;"></select>
+        </div>
+        <span class="calc-label">材長 (m)</span>
+        <div class="length-control">
+            <button class="length-btn" onclick="addLength(-1)">－</button>
+            <div class="length-display"><span id="c_length_disp">4</span> m</div>
+            <button class="length-btn" onclick="addLength(1)">＋</button>
+        </div>
+        <div class="calc-display-area" onclick="clearCalc()">
+            <span class="calc-label">末口直径 (cm)</span>
+            <div id="c_diameter_disp" class="calc-value">0</div>
+        </div>
+        <div class="numpad">
+            <button class="num-btn" onclick="numInput(7)">7</button>
+            <button class="num-btn" onclick="numInput(8)">8</button>
+            <button class="num-btn" onclick="numInput(9)">9</button>
+            <button class="num-btn btn-clr" onclick="clearCalc()">C</button>
+            <button class="num-btn" onclick="numInput(4)">4</button>
+            <button class="num-btn" onclick="numInput(5)">5</button>
+            <button class="num-btn" onclick="numInput(6)">6</button>
+            <button class="num-btn" onclick="numInput('BS')">⌫</button>
+            <button class="num-btn" onclick="numInput(1)">1</button>
+            <button class="num-btn" onclick="numInput(2)">2</button>
+            <button class="num-btn" onclick="numInput(3)">3</button>
+            <button class="num-btn btn-save-large" style="grid-row: span 2;" onclick="saveData('calc')">保存</button>
+            <button class="num-btn" onclick="numInput(0)" style="grid-column: span 2;">0</button>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="summary-box">
+        <div>本数: <span id="totalCount">0</span> 本</div>
+        <div>材積: <span id="totalVolume">0.000</span> m3</div>
+    </div>
+    <div class="table-container">
+        <table id="dataTable">
+            <thead><tr><th>樹種</th><th>長</th><th>径</th><th>材積</th><th>操作</th></tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+    <button class="export-btn" onclick="handleExport()">CSV出力</button>
+    <div style="text-align:right; margin-top:10px;">
+        <button class="btn-del" style="background:#666;" onclick="handleAllClear()">全消去</button>
+    </div>
+</div>
+
+<div id="settingsModal" class="modal">
+    <div class="modal-content">
+        <div class="header-area"><h3>設定</h3></div>
+        <label>追加樹種 (最大5つ)</label>
+        <div id="customTreeInputs"></div>
+        <button class="export-btn" onclick="saveSettings()" style="margin-top:15px; background:#5d4037;">設定保存</button>
+        <button class="close-btn" onclick="closeSettings()">閉じる</button>
+    </div>
+</div>
 
 <script>
+    const STORAGE_KEY = 'timber_doubsta_data';
+    const SETTINGS_KEY = 'timber_doubsta_settings';
+    const DEFAULT_TREES = ['スギ', 'ヒノキ', '他針', '他広'];
+    
+    let currentSettings = { customTrees: [] };
+    let currentMode = 'camera'; // 初期をカメラに変更
+    
+    let calcDiameterStr = "";
+    let calcLength = 4;
+
+    window.onload = function() {
+        // PWAのService Worker登録
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js').then(reg => {
+                console.log('SW registered!', reg);
+            }).catch(err => console.log('SW fail', err));
+        }
+
+        loadSettings();
+        renderTable();
+        
+        const container = document.getElementById('customTreeInputs');
+        for(let i=1; i<=5; i++){
+            container.innerHTML += `<input type="text" id="customTree${i}" placeholder="追加${i}" style="margin-bottom:5px;">`;
+        }
+        initVoice();
+        initCamera(); // カメラ初期化を追加
+    };
+
+    // --- モード切替 ---
+    function switchMode(mode) {
+        currentMode = mode;
+        document.getElementById('viewCamera').style.display = mode === 'camera' ? 'block' : 'none';
+        document.getElementById('viewVoice').style.display = mode === 'voice' ? 'block' : 'none';
+        document.getElementById('viewCalc').style.display = mode === 'calc' ? 'block' : 'none';
+
+        document.getElementById('tabCamera').classList.toggle('tab-active', mode === 'camera');
+        document.getElementById('tabVoice').classList.toggle('tab-active', mode === 'voice');
+        document.getElementById('tabCalc').classList.toggle('tab-active', mode === 'calc');
+    }
+
+    // --- カメラ & AI 処理 ---
     const video = document.getElementById('webcam');
     const canvas = document.getElementById('overlay');
     const ctx = canvas.getContext('2d');
-    const statusDiv = document.getElementById('status');
-    
-    let model; // AIモデルを格納する変数
-    let currentStream; // カメラストリーム
-    let facingMode = "environment"; // 初期は背面カメラ（environment）
+    const camStatus = document.getElementById('camStatus');
+    let aiModel;
+    let isAILunning = false;
+    let cameraStream;
+    let facingMode = "environment";
 
-    // 1. メイン処理の開始
-    async function main() {
+    async function initCamera() {
         try {
-            // AIモデルのロード
-            statusDiv.innerText = "AIモデルをロード中...";
-            model = await cocoSsd.load();
-            statusDiv.innerText = "カメラを起動中...";
-
-            // カメラのセットアップ
-            await setupCamera();
+            if(cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); }
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: facingMode, width: { ideal: 640 }, height: { ideal: 480 } },
+                audio: false
+            });
+            video.srcObject = stream;
+            cameraStream = stream;
             
-            // 検知ループの開始
-            detectFrame();
-            
-            statusDiv.innerText = "検知中：身の回りの物を映してください（人、コップ、スマホなど）";
-        } catch (error) {
-            console.error(error);
-            statusDiv.innerText = "エラーが発生しました: " + error.message;
-        }
-    }
-
-    // 2. カメラの設定
-    async function setupCamera() {
-        if (currentStream) {
-            currentStream.getTracks().forEach(track => track.stop());
-        }
-
-        const constraints = {
-            video: {
-                facingMode: facingMode,
-                width: { ideal: 640 },
-                height: { ideal: 480 }
-            },
-            audio: false
-        };
-
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
-        video.srcObject = stream;
-        currentStream = stream;
-
-        return new Promise((resolve) => {
             video.onloadedmetadata = () => {
-                // ビデオのサイズに合わせてキャンバスのサイズを調整
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
-                resolve(video);
+                camStatus.style.display = "none";
             };
-        });
-    }
-
-    // 3. カメラ切替ボタンの処理
-    async function switchCamera() {
-        facingMode = facingMode === "user" ? "environment" : "user";
-        statusDiv.innerText = "カメラ切り替え中...";
-        await setupCamera();
-        statusDiv.innerText = "検知中";
-    }
-
-    // 4. 物体検知ループ（パラパラ漫画のように繰り返す）
-    async function detectFrame() {
-        // ビデオが再生中でなければ何もしない
-        if (video.readyState !== 4) {
-            requestAnimationFrame(detectFrame);
-            return;
+        } catch (err) {
+            camStatus.innerText = "カメラ起動失敗: " + err.message;
         }
+    }
 
-        // AIによる予測を実行
-        // 戻り値は [{bbox: [x, y, width, height], class: "person", score: 0.9}, ...]
-        const predictions = await model.detect(video);
+    function switchCamera() {
+        facingMode = facingMode === "user" ? "environment" : "user";
+        initCamera();
+    }
 
-        // 前のフレームの描画を消す
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        // 検出されたすべての物体に対して描画
-        predictions.forEach(prediction => {
-            // スコア（確信度）が60%以上のものだけ表示
-            if (prediction.score > 0.6) {
-                const [x, y, width, height] = prediction['bbox'];
-                const text = prediction['class']; // 物体の名前（英語）
-
-                // 枠線を描く
-                ctx.strokeStyle = "#00FFFF"; // 水色
-                ctx.lineWidth = 4;
-                ctx.strokeRect(x, y, width, height);
-
-                // 文字の背景を描く
-                ctx.fillStyle = "#00FFFF";
-                const textWidth = ctx.measureText(text).width;
-                ctx.fillRect(x, y, textWidth + 10, 20);
-
-                // 文字を描く
-                ctx.fillStyle = "#000000";
-                ctx.font = "16px Arial";
-                ctx.fillText(text, x + 5, y + 15);
+    async function toggleAI() {
+        const btn = document.getElementById('aiStartBtn');
+        if(isAILunning) {
+            isAILunning = false;
+            btn.innerText = "🚀 AI検知スタート";
+            btn.style.background = "#1565c0";
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        } else {
+            isAILunning = true;
+            btn.innerText = "⏳ モデル読込中...";
+            btn.style.background = "#d32f2f";
+            
+            if(!aiModel) {
+                aiModel = await cocoSsd.load(); // 仮モデル
             }
-        });
+            
+            btn.innerText = "■ AI停止";
+            detectFrame();
+        }
+    }
 
-        // 次のフレームで再度この関数を呼ぶ
+    async function detectFrame() {
+        if(!isAILunning) return;
+        if(video.readyState === 4) {
+            const predictions = await aiModel.detect(video);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            predictions.forEach(p => {
+                if(p.score > 0.6) {
+                    const [x, y, w, h] = p.bbox;
+                    ctx.strokeStyle = "#00FFFF";
+                    ctx.lineWidth = 4;
+                    ctx.strokeRect(x, y, w, h);
+                    ctx.fillStyle = "#00FFFF";
+                    ctx.fillRect(x, y, ctx.measureText(p.class).width + 10, 20);
+                    ctx.fillStyle = "#000000";
+                    ctx.font = "16px Arial";
+                    ctx.fillText(p.class, x + 5, y + 15);
+                }
+            });
+        }
         requestAnimationFrame(detectFrame);
     }
 
-    // 実行開始
-    main();
+    // --- 既存の保存・音声・電卓ロジック（そのまま） ---
+    let lastUtterance = null;
+    function speakText(text) {
+        if (!window.speechSynthesis) return;
+        window.speechSynthesis.cancel();
+        const uttr = new SpeechSynthesisUtterance(text);
+        uttr.lang = 'ja-JP';
+        const voices = window.speechSynthesis.getVoices();
+        const jaVoice = voices.find(v => v.lang.includes('ja'));
+        if (jaVoice) uttr.voice = jaVoice;
+        lastUtterance = uttr;
+        uttr.onend = function() { lastUtterance = null; };
+        window.speechSynthesis.speak(uttr);
+    }
 
+    function saveData(source) {
+        let tree, len, dia, memo = "";
+        if (source === 'voice') {
+            tree = document.getElementById('v_treeType').value;
+            len = parseFloat(document.getElementById('v_length').value);
+            dia = parseFloat(document.getElementById('v_diameter').value);
+            memo = document.getElementById('v_memo').value;
+        } else {
+            tree = document.getElementById('c_treeType').value;
+            len = calcLength;
+            dia = parseFloat(calcDiameterStr);
+        }
+        if (!len || !dia) return alert("材長または直径が未入力です");
+
+        let vol = 0;
+        if (len < 6) {
+            vol = (dia * dia * len) / 10000;
+        } else {
+            const L_prime = Math.floor(len);
+            const factor = dia + (L_prime - 4) / 2;
+            vol = (factor * factor * len) / 10000;
+        }
+        vol = Math.round(vol * 1000) / 1000;
+
+        const list = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        list.unshift({ id: Date.now(), tree, length: len, diameter: dia, volume: vol, memo, mode: source });
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+
+        if(source === 'voice') speakText(`${tree}、長さ${len}、直径${dia}、保存しました`);
+        
+        if (source === 'voice') {
+            document.getElementById('v_diameter').value = "";
+            document.getElementById('v_memo').value = "";
+        } else {
+            clearCalc();
+        }
+        renderTable();
+    }
+
+    function renderTable() {
+        const list = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        const tbody = document.querySelector('#dataTable tbody');
+        tbody.innerHTML = '';
+        let totalC = 0, totalV = 0;
+        list.forEach(item => {
+            totalC++; totalV += item.volume;
+            tbody.innerHTML += `<tr><td>${item.tree}</td><td>${item.length}</td><td>${item.diameter}</td><td>${item.volume.toFixed(3)}</td><td><button class="btn-del" onclick="deleteItem(${item.id})">×</button></td></tr>`;
+        });
+        document.getElementById('totalCount').innerText = totalC;
+        document.getElementById('totalVolume').innerText = totalV.toFixed(3);
+    }
+
+    function deleteItem(id) {
+        if(!confirm("削除しますか？")) return;
+        let list = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(list.filter(i => i.id !== id)));
+        renderTable();
+    }
+
+    function handleAllClear() {
+        if(!confirm("全データを消去しますか？")) return;
+        localStorage.removeItem(STORAGE_KEY);
+        renderTable();
+    }
+
+    function numInput(num) {
+        if (num === 'BS') { calcDiameterStr = calcDiameterStr.slice(0, -1); } 
+        else if (calcDiameterStr.length < 3) { calcDiameterStr += num; }
+        document.getElementById('c_diameter_disp').innerText = calcDiameterStr === "" ? "0" : calcDiameterStr;
+    }
+
+    function clearCalc() {
+        calcDiameterStr = "";
+        document.getElementById('c_diameter_disp').innerText = "0";
+    }
+
+    function addLength(val) {
+        calcLength += val;
+        if(calcLength < 1) calcLength = 1; 
+        document.getElementById('c_length_disp').innerText = calcLength;
+    }
+
+    function openSettings() {
+        for(let i=1; i<=5; i++){ document.getElementById(`customTree${i}`).value = currentSettings.customTrees[i-1] || ""; }
+        document.getElementById('settingsModal').style.display = 'block';
+    }
+    function closeSettings() { document.getElementById('settingsModal').style.display = 'none'; }
+    function saveSettings() {
+        let newTrees = [];
+        for(let i=1; i<=5; i++){
+            const val = document.getElementById(`customTree${i}`).value.trim();
+            if(val) newTrees.push(val);
+        }
+        currentSettings.customTrees = newTrees;
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(currentSettings));
+        updateTreeSelectors();
+        closeSettings();
+    }
+
+    function loadSettings() {
+        const saved = localStorage.getItem(SETTINGS_KEY);
+        if(saved) currentSettings = JSON.parse(saved);
+        updateTreeSelectors();
+    }
+
+    function updateTreeSelectors() {
+        const options = [...DEFAULT_TREES, ...currentSettings.customTrees];
+        document.querySelectorAll('.tree-selector').forEach(sel => {
+            const currentVal = sel.value;
+            sel.innerHTML = "";
+            options.forEach(t => sel.appendChild(new Option(t, t)));
+            if(options.includes(currentVal)) sel.value = currentVal;
+        });
+    }
+
+    function handleExport() {
+        const list = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        if(list.length === 0) return alert("データがありません");
+        let csv = "\ufeff樹種,材長,末口直径,材積,備考\n";
+        list.forEach(i => csv += `${i.tree},${i.length},${i.diameter},${i.volume},${i.memo}\n`);
+        const a = document.createElement("a");
+        const now = new Date();
+        a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+        a.download = `丸太検知-${now.getFullYear()}${(now.getMonth()+1).toString().padStart(2,'0')}${now.getDate().toString().padStart(2,'0')}-${now.getHours().toString().padStart(2,'0')}${now.getMinutes().toString().padStart(2,'0')}.csv`;
+        a.click();
+    }
+
+    let recognition;
+    let isMicOn = false;
+    const kanjiNumMap = { '一':1, '二':2, '三':3, '四':4, '五':5, '六':6, '七':7, '八':8, '九':9, '〇':0, '零':0 };
+    function textToNum(text) {
+        text = text.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/[一二三四五六七八九〇]/g, s => kanjiNumMap[s]);
+        const match = text.match(/\d+/);
+        return match ? match[0] : null;
+    }
+
+    function initVoice() {
+        if (!window.webkitSpeechRecognition && !window.SpeechRecognition) return document.getElementById('voiceStatus').innerText = "音声非対応";
+        const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
+        recognition = new Speech();
+        recognition.lang = 'ja-JP';
+        recognition.continuous = true;
+        recognition.onresult = function(e) {
+            const text = e.results[e.results.length - 1][0].transcript;
+            document.getElementById('voiceStatus').innerText = "認識: " + text;
+            parseVoice(text);
+        };
+        recognition.onend = function() { if(isMicOn) recognition.start(); };
+    }
+
+    function toggleMic() {
+        if(!recognition) return;
+        isMicOn = !isMicOn;
+        const btn = document.querySelector('.btn-mic');
+        const status = document.getElementById('voiceStatus');
+        if(isMicOn) {
+            if(window.speechSynthesis) window.speechSynthesis.speak(new SpeechSynthesisUtterance(''));
+            recognition.start();
+            btn.style.background = "#d32f2f"; btn.innerText = "■ 停止";
+            status.innerText = "聞いています..."; status.classList.add('listening');
+        } else {
+            recognition.stop();
+            btn.style.background = "#8b4513"; btn.innerText = "🎤 開始";
+            status.innerText = "待機中"; status.classList.remove('listening');
+        }
+    }
+
+    function parseVoice(text) {
+        if(text.includes("保存") || text.includes("ほぞん")) return saveData('voice');
+        const treeSel = document.getElementById('v_treeType');
+        if(text.includes("すぎ") || text.includes("スギ")) { treeSel.value = "スギ"; speakText("スギ"); }
+        else if(text.includes("ひのき") || text.includes("ヒノキ")) { treeSel.value = "ヒノキ"; speakText("ヒノキ"); }
+        
+        if(text.includes("長さ") || text.includes("ながさ")) {
+            const num = textToNum(text);
+            if(num) { document.getElementById('v_length').value = num; speakText("長さ " + num); }
+        } else if(text.includes("直径") || text.includes("ちょっけい") || text.includes("センチ")) {
+            const num = textToNum(text);
+            if(num) { document.getElementById('v_diameter').value = num; speakText("直径 " + num); }
+        } else if(text.includes("メモ") || text.includes("めも")) {
+            let memoContent = text.replace(/.*(メモ|めも)/, "").trim().replace("まがり", "曲り");
+            document.getElementById('v_memo').value = memoContent; speakText("備考 " + memoContent);
+        }
+    }
 </script>
 </body>
 </html>
