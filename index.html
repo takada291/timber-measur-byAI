@@ -87,7 +87,7 @@
 
 <div class="card">
     <div class="header-area">
-        <h2>AI検知ツール0.4</h2>
+        <h2>AI検知ツール0.4.1</h2>
         <button class="settings-btn" onclick="openSettings()">⚙️ 設定</button>
     </div>
 
@@ -242,7 +242,7 @@
     const ctx = canvas.getContext('2d');
     const camStatus = document.getElementById('camStatus');
     
-    let logModel; // AIモデルの変数を変更
+    let logModel;
     let isAILunning = false;
     let cameraStream;
     let facingMode = "environment";
@@ -255,8 +255,8 @@
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: { 
                     facingMode: facingMode, 
-                    width: { ideal: 640, max: 640 },  // maxを追加
-                    height: { ideal: 480, max: 480 } // maxを追加
+                    width: { ideal: 640, max: 640 },  
+                    height: { ideal: 480, max: 480 } 
                 },
                 audio: false
             });
@@ -303,7 +303,6 @@
             
             if(!logModel) {
                 try {
-                    // 前回取得したRoboflowのキーとモデル情報をここで読み込みます
                     const rf = await window.roboflow.auth({
                         publishable_key: "rf_sRyNyDbysrbVYyp2FNCslDCxdpN2"
                     });
@@ -332,14 +331,24 @@
         if(video.readyState === 4 && logModel) {
             // Roboflowモデルで推論
             const predictions = await logModel.detect(video);
+            
+            // 【重要】実際のビデオの表示サイズを取得してキャンバスを合わせる
+            const rect = video.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+            
+            // 【重要】カメラの生解像度と、画面の表示サイズの「倍率」を計算する
+            const scaleX = rect.width / video.videoWidth;
+            const scaleY = rect.height / video.videoHeight;
+
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
             predictions.forEach(p => {
-                // 中心座標から左上の座標を計算
-                const x = p.bbox.x - p.bbox.width / 2;
-                const y = p.bbox.y - p.bbox.height / 2;
-                const w = p.bbox.width;
-                const h = p.bbox.height;
+                // 【重要】AIが出した座標に、計算した倍率を掛けてズレを直す
+                const w = p.bbox.width * scaleX;
+                const h = p.bbox.height * scaleY;
+                const x = (p.bbox.x * scaleX) - (w / 2);
+                const y = (p.bbox.y * scaleY) - (h / 2);
                 
                 // 丸太を囲む枠線の設定（見やすい紫色に変更）
                 ctx.strokeStyle = '#9932CC'; 
@@ -564,7 +573,3 @@
 </script>
 </body>
 </html>
-
-
-
-
