@@ -13,8 +13,7 @@
     <meta name="apple-mobile-web-app-title" content="AI検知">
     <link rel="apple-touch-icon" href="icon-512.png">
 
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+    <script src="https://cdn.roboflow.com/0.2.26/roboflow.js"></script>
 
     <style>
         /* --- 基本スタイル --- */
@@ -105,10 +104,10 @@
             <div id="camStatus" style="position: absolute; color: white; z-index: 20;">カメラ起動待ち...</div>
         </div>
         <div class="camera-controls">
-            <button class="btn-ai-start" id="aiStartBtn" onclick="toggleAI()">🚀 AI検知スタート</button>
+            <button class="btn-ai-start" id="aiStartBtn" onclick="toggleAI()">🚀 丸太検知スタート</button>
             <button class="btn-cam-switch" onclick="switchCamera()">切替</button>
         </div>
-        <p class="guide-bottom">※現在はテスト用の一般物体検知AIが動きます</p>
+        <p class="guide-bottom">※自作の丸太検知AIが起動します</p>
     </div>
 
     <div id="viewVoice" style="display:none;">
@@ -202,13 +201,12 @@
     const DEFAULT_TREES = ['スギ', 'ヒノキ', '他針', '他広'];
     
     let currentSettings = { customTrees: [] };
-    let currentMode = 'camera'; // 初期をカメラに変更
+    let currentMode = 'camera'; 
     
     let calcDiameterStr = "";
     let calcLength = 4;
 
     window.onload = function() {
-        // PWAのService Worker登録
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('./sw.js').then(reg => {
                 console.log('SW registered!', reg);
@@ -223,7 +221,7 @@
             container.innerHTML += `<input type="text" id="customTree${i}" placeholder="追加${i}" style="margin-bottom:5px;">`;
         }
         initVoice();
-        initCamera(); // カメラ初期化を追加
+        initCamera(); 
     };
 
     // --- モード切替 ---
@@ -238,12 +236,13 @@
         document.getElementById('tabCalc').classList.toggle('tab-active', mode === 'calc');
     }
 
-    // --- カメラ & AI 処理 ---
+    // --- カメラ & 丸太AI 処理 ---
     const video = document.getElementById('webcam');
     const canvas = document.getElementById('overlay');
     const ctx = canvas.getContext('2d');
     const camStatus = document.getElementById('camStatus');
-    let aiModel;
+    
+    let logModel; // AIモデルの変数を変更
     let isAILunning = false;
     let cameraStream;
     let facingMode = "environment";
@@ -277,7 +276,7 @@
         const btn = document.getElementById('aiStartBtn');
         if(isAILunning) {
             isAILunning = false;
-            btn.innerText = "🚀 AI検知スタート";
+            btn.innerText = "🚀 丸太検知スタート";
             btn.style.background = "#1565c0";
             ctx.clearRect(0, 0, canvas.width, canvas.height);
         } else {
@@ -285,8 +284,25 @@
             btn.innerText = "⏳ モデル読込中...";
             btn.style.background = "#d32f2f";
             
-            if(!aiModel) {
-                aiModel = await cocoSsd.load(); // 仮モデル
+            if(!logModel) {
+                try {
+                    // 前回取得したRoboflowのキーとモデル情報をここで読み込みます
+                    const rf = await window.roboflow.auth({
+                        publishable_key: "WgeEKIqfSAI1zfDZcRyS"
+                    });
+                    
+                    logModel = await rf.load({
+                        model: "my-first-project-bjosg",
+                        version: 3
+                    });
+                    console.log("丸太モデルの読み込み完了！");
+                } catch (e) {
+                    alert("モデルの読み込みに失敗しました: " + e.message);
+                    isAILunning = false;
+                    btn.innerText = "🚀 丸太検知スタート";
+                    btn.style.background = "#1565c0";
+                    return;
+                }
             }
             
             btn.innerText = "■ AI停止";
@@ -296,21 +312,33 @@
 
     async function detectFrame() {
         if(!isAILunning) return;
-        if(video.readyState === 4) {
-            const predictions = await aiModel.detect(video);
+        if(video.readyState === 4 && logModel) {
+            // Roboflowモデルで推論
+            const predictions = await logModel.detect(video);
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
             predictions.forEach(p => {
-                if(p.score > 0.6) {
-                    const [x, y, w, h] = p.bbox;
-                    ctx.strokeStyle = "#00FFFF";
-                    ctx.lineWidth = 4;
-                    ctx.strokeRect(x, y, w, h);
-                    ctx.fillStyle = "#00FFFF";
-                    ctx.fillRect(x, y, ctx.measureText(p.class).width + 10, 20);
-                    ctx.fillStyle = "#000000";
-                    ctx.font = "16px Arial";
-                    ctx.fillText(p.class, x + 5, y + 15);
-                }
+                // 中心座標から左上の座標を計算
+                const x = p.bbox.x - p.bbox.width / 2;
+                const y = p.bbox.y - p.bbox.height / 2;
+                const w = p.bbox.width;
+                const h = p.bbox.height;
+                
+                // 丸太を囲む枠線の設定（見やすい紫色に変更）
+                ctx.strokeStyle = '#9932CC'; 
+                ctx.lineWidth = 3;
+                ctx.strokeRect(x, y, w, h);
+
+                // ラベル（log）と確信度のテキストを描画
+                ctx.fillStyle = '#9932CC';
+                ctx.font = '16px Arial';
+                const text = `${p.class} ${Math.round(p.confidence * 100)}%`;
+                
+                const textWidth = ctx.measureText(text).width;
+                ctx.fillRect(x, y - 20, textWidth + 4, 20);
+                
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillText(text, x + 2, y - 5);
             });
         }
         requestAnimationFrame(detectFrame);
