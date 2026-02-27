@@ -87,7 +87,7 @@
 
 <div class="card">
     <div class="header-area">
-        <h2>AI検知ツール0.1</h2>
+        <h2>AI検知ツール0.2</h2>
         <button class="settings-btn" onclick="openSettings()">⚙️ 設定</button>
     </div>
 
@@ -288,7 +288,7 @@
                 try {
                     // 前回取得したRoboflowのキーとモデル情報をここで読み込みます
                     const rf = await window.roboflow.auth({
-                        publishable_key: "WgeEKIqfSAI1zfDZcRyS"
+                        publishable_key: "rf_sRyNyDbysrbVYyp2FNCslDCxdpN2"
                     });
                     
                     logModel = await rf.load({
@@ -297,7 +297,7 @@
                     });
                     console.log("丸太モデルの読み込み完了！");
                 } catch (e) {
-                    alert("モデルの読み込みに失敗しました: " + e.message);
+                    alert("モデルの読み込みに失敗しました: " + (e.message || e));
                     isAILunning = false;
                     btn.innerText = "🚀 丸太検知スタート";
                     btn.style.background = "#1565c0";
@@ -546,4 +546,5 @@
 </script>
 </body>
 </html>
+
 
