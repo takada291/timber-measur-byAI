@@ -87,7 +87,7 @@
 
 <div class="card">
     <div class="header-area">
-        <h2>AI検知ツール0.3</h2>
+        <h2>AI検知ツール0.4</h2>
         <button class="settings-btn" onclick="openSettings()">⚙️ 設定</button>
     </div>
 
@@ -250,17 +250,34 @@
     async function initCamera() {
         try {
             if(cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); }
+            
+            // AQUOS（Android）での処理落ちを防ぐため、解像度の上限を厳格に指定します
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: facingMode, width: { ideal: 640 }, height: { ideal: 480 } },
+                video: { 
+                    facingMode: facingMode, 
+                    width: { ideal: 640, max: 640 },  // maxを追加
+                    height: { ideal: 480, max: 480 } // maxを追加
+                },
                 audio: false
             });
+            
             video.srcObject = stream;
             cameraStream = stream;
             
+            // Android Chromeで確実に映像ストリームを処理させるためのおまじない
+            video.setAttribute('autoplay', '');
+            video.setAttribute('muted', '');
+            video.setAttribute('playsinline', '');
+            
             video.onloadedmetadata = () => {
+                video.play(); // 明示的に再生をキックする
+                
+                // 実際の映像サイズに合わせてキャンバスを調整
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
                 camStatus.style.display = "none";
+                
+                console.log(`カメラ解像度: ${video.videoWidth} x ${video.videoHeight}`);
             };
         } catch (err) {
             camStatus.innerText = "カメラ起動失敗: " + err.message;
@@ -547,6 +564,7 @@
 </script>
 </body>
 </html>
+
 
 
 
