@@ -87,7 +87,7 @@
 
 <div class="card">
     <div class="header-area">
-        <h2>AI検知ツール0.2</h2>
+        <h2>AI検知ツール0.3</h2>
         <button class="settings-btn" onclick="openSettings()">⚙️ 設定</button>
     </div>
 
@@ -341,7 +341,8 @@
                 ctx.fillText(text, x + 2, y - 5);
             });
         }
-        requestAnimationFrame(detectFrame);
+        // requestAnimationFrame を setTimeout に変更し、300ミリ秒（0.3秒）の待機を入れます
+        setTimeout(detectFrame, 300);
     }
 
     // --- 既存の保存・音声・電卓ロジック（そのまま） ---
@@ -546,5 +547,6 @@
 </script>
 </body>
 </html>
+
 
 
