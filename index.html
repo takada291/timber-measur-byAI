@@ -24,52 +24,21 @@
         h2 { margin: 0; font-size: 1.1em; color: #5d4037; }
         .settings-btn { background: #6c757d; color: white; padding: 6px 12px; font-size: 0.85em; border-radius: 20px; border: none; cursor: pointer; }
 
-        /* --- タブ切り替え --- */
-        .tab-group { display: flex; gap: 5px; margin-bottom: 15px; }
-        .tab-btn { flex: 1; padding: 10px 5px; border: none; border-radius: 8px; font-weight: bold; color: #fff; cursor: pointer; opacity: 0.5; transition: 0.3s; font-size: 0.85em; }
-        .tab-camera { background: #1565c0; } /* 青色 */
-        .tab-voice { background: #8b4513; } /* 茶色 */
-        .tab-calc { background: #2e7d32; }  /* 緑色 */
-        .tab-active { opacity: 1; transform: scale(1.02); box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
-
         /* --- カメラモード用 --- */
         #camera-container { position: relative; width: 100%; border-radius: 8px; overflow: hidden; background: #000; display: flex; justify-content: center; align-items: center; min-height: 250px; }
         video { width: 100%; height: auto; display: block; }
         canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; }
         .camera-controls { display: flex; justify-content: space-between; margin-top: 10px; gap: 10px; }
-        .btn-ai-start { flex: 2; background: #1565c0; color: white; padding: 12px; border: none; border-radius: 6px; font-weight: bold; font-size: 1rem; }
-        .btn-cam-switch { flex: 1; background: #555; color: white; padding: 12px; border: none; border-radius: 6px; }
+        .btn-ai-start { flex: 1; background: #1565c0; color: white; padding: 12px; border: none; border-radius: 6px; font-weight: bold; font-size: 1rem; }
+        .btn-shutter { flex: 1; background: #e65100; color: white; padding: 12px; border: none; border-radius: 6px; font-weight: bold; font-size: 1rem; display: none; }
 
-        /* --- 共通入力エリア --- */
-        .input-row { margin-bottom: 12px; }
-        .label-group { display: flex; flex-direction: column; margin-bottom: 4px; }
-        .label-group label { font-size: 0.9em; font-weight: bold; color: #5d4037; }
-        .guide-label { font-size: 0.75em; color: #795548; margin-bottom: 2px; }
-        input, select { width: 100%; padding: 12px; border: 1px solid #d7ccc8; border-radius: 6px; font-size: 16px; box-sizing: border-box; background: white; }
-        
-        /* --- 音声モード用 --- */
-        #voiceStatus { font-size: 0.9em; color: white; background: #999; padding: 8px 12px; border-radius: 20px; display: inline-block; margin-bottom: 10px;}
-        .listening { background: #d32f2f !important; animation: pulse 1.5s infinite; }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
-        .voice-btn-group { display: flex; gap: 8px; margin-top: 15px; }
-        .voice-btn-group button { flex: 1; padding: 15px; border: none; border-radius: 6px; font-weight: bold; color: white; font-size: 1rem; }
-        .btn-mic { background: #8b4513; }
-        .btn-save { background: #5d4037; }
-        .guide-bottom { font-size: 0.8rem; color: #795548; text-align: center; margin-top: 10px; }
+        /* --- 計測設定エリア（シャッター後に表示） --- */
+        #calibration-area { background: #fff3e0; padding: 12px; border-radius: 8px; margin-top: 15px; display: none; border: 2px solid #ffb74d; }
+        .calib-message { font-weight: bold; color: #e65100; margin-top: 0; margin-bottom: 10px; font-size: 0.95em; }
+        .input-row { margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;}
+        .input-row label { font-size: 0.9em; font-weight: bold; color: #5d4037; width: 30%;}
+        input, select { width: 65%; padding: 10px; border: 1px solid #d7ccc8; border-radius: 6px; font-size: 16px; box-sizing: border-box; background: white; }
 
-        /* --- 電卓モード用 --- */
-        .calc-display-area { background: #eee; padding: 15px; border-radius: 8px; margin-bottom: 10px; text-align: right; border: 2px solid #ccc; }
-        .calc-label { font-size: 0.8rem; color: #666; display: block; text-align: left; }
-        .calc-value { font-size: 2.5rem; font-weight: bold; color: #333; font-family: monospace; }
-        .length-control { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; background: #fff; padding: 5px; border-radius: 8px; border: 1px solid #ddd; }
-        .length-btn { width: 60px; height: 50px; font-size: 1.5rem; background: #f0f0f0; border: 1px solid #ccc; border-radius: 6px; color: #333; }
-        .length-display { flex: 1; text-align: center; font-size: 1.8rem; font-weight: bold; color: #2e7d32; }
-        .numpad { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; }
-        .num-btn { padding: 20px 0; font-size: 1.8rem; border: none; border-radius: 8px; background: white; box-shadow: 0 2px 0 #ccc; color: #333; font-weight: bold; }
-        .num-btn:active { transform: translateY(2px); box-shadow: none; background: #eee; }
-        .btn-clr { background: #ef5350; color: white; }
-        .btn-save-large { grid-column: span 2; background: #2e7d32; color: white; font-size: 1.5rem; }
-        
         /* --- データ一覧 & 設定 --- */
         .summary-box { display: flex; justify-content: space-between; background: #efebe9; padding: 10px; border-radius: 8px; margin: 20px 0 10px; font-weight: bold; color: #5d4037; }
         table { width: 100%; border-collapse: collapse; font-size: 12px; }
@@ -87,14 +56,8 @@
 
 <div class="card">
     <div class="header-area">
-        <h2>AI検知ツール0.5</h2>
+        <h2>AI検知 0.6</h2>
         <button class="settings-btn" onclick="openSettings()">⚙️ 設定</button>
-    </div>
-
-    <div class="tab-group">
-        <button class="tab-btn tab-camera tab-active" id="tabCamera" onclick="switchMode('camera')">📸 AIカメラ</button>
-        <button class="tab-btn tab-voice" id="tabVoice" onclick="switchMode('voice')">🎙️ 音声</button>
-        <button class="tab-btn tab-calc" id="tabCalc" onclick="switchMode('calc')">🔢 電卓</button>
     </div>
 
     <div id="viewCamera">
@@ -104,66 +67,20 @@
             <div id="camStatus" style="position: absolute; color: white; z-index: 20;">カメラ起動待ち...</div>
         </div>
         <div class="camera-controls">
-            <button class="btn-ai-start" id="aiStartBtn" onclick="toggleAI()">🚀 丸太検知スタート</button>
-            <button class="btn-cam-switch" onclick="switchCamera()">切替</button>
+            <button class="btn-ai-start" id="aiStartBtn" onclick="toggleAI()">🚀 検知スタート</button>
+            <button class="btn-shutter" id="shutterBtn" onclick="toggleShutter()">📸 シャッター</button>
         </div>
-        <p class="guide-bottom">※自作の丸太検知AIが起動します</p>
-    </div>
-
-    <div id="viewVoice" style="display:none;">
-        <div id="voiceStatus">音声入力：待機中</div>
-        <div class="input-row">
-            <div class="label-group"><span class="guide-label">発音例「しゅるい　すぎ」</span><label>樹種</label></div>
-            <select id="v_treeType" class="tree-selector"></select>
-        </div>
-        <div class="input-row">
-            <div class="label-group"><span class="guide-label">発音例「ながさ　よん」</span><label>材長 (m)</label></div>
-            <input type="number" id="v_length" value="4">
-        </div>
-        <div class="input-row">
-            <div class="label-group"><span class="guide-label">発音例「ちょっけい　さんじゅうろく」</span><label>末口直径 (cm)</label></div>
-            <input type="number" id="v_diameter">
-        </div>
-        <div class="input-row">
-            <div class="label-group"><span class="guide-label">発音例「めも　まがり」</span><label>備考</label></div>
-            <input type="text" id="v_memo">
-        </div>
-        <div class="voice-btn-group">
-            <button class="btn-mic" onclick="toggleMic()">🎤 開始/停止</button>
-            <button class="btn-save" onclick="saveData('voice')">保存</button>
-        </div>
-        <p class="guide-bottom">※「ほぞん」と発音すると登録されます。</p>
-    </div>
-
-    <div id="viewCalc" style="display:none;">
-        <div style="margin-bottom:10px;">
-            <label class="calc-label">樹種を選択</label>
-            <select id="c_treeType" class="tree-selector" style="font-size:1.2rem; padding:10px;"></select>
-        </div>
-        <span class="calc-label">材長 (m)</span>
-        <div class="length-control">
-            <button class="length-btn" onclick="addLength(-1)">－</button>
-            <div class="length-display"><span id="c_length_disp">4</span> m</div>
-            <button class="length-btn" onclick="addLength(1)">＋</button>
-        </div>
-        <div class="calc-display-area" onclick="clearCalc()">
-            <span class="calc-label">末口直径 (cm)</span>
-            <div id="c_diameter_disp" class="calc-value">0</div>
-        </div>
-        <div class="numpad">
-            <button class="num-btn" onclick="numInput(7)">7</button>
-            <button class="num-btn" onclick="numInput(8)">8</button>
-            <button class="num-btn" onclick="numInput(9)">9</button>
-            <button class="num-btn btn-clr" onclick="clearCalc()">C</button>
-            <button class="num-btn" onclick="numInput(4)">4</button>
-            <button class="num-btn" onclick="numInput(5)">5</button>
-            <button class="num-btn" onclick="numInput(6)">6</button>
-            <button class="num-btn" onclick="numInput('BS')">⌫</button>
-            <button class="num-btn" onclick="numInput(1)">1</button>
-            <button class="num-btn" onclick="numInput(2)">2</button>
-            <button class="num-btn" onclick="numInput(3)">3</button>
-            <button class="num-btn btn-save-large" style="grid-row: span 2;" onclick="saveData('calc')">保存</button>
-            <button class="num-btn" onclick="numInput(0)" style="grid-column: span 2;">0</button>
+        
+        <div id="calibration-area">
+            <p class="calib-message">✅ 画面を固定しました。<br>基準となる丸太の枠をタップしてください。(※準備中)</p>
+            <div class="input-row">
+                <label>一括設定: 樹種</label>
+                <select id="m_treeType" class="tree-selector"></select>
+            </div>
+            <div class="input-row">
+                <label>一括設定: 長さ(m)</label>
+                <input type="number" id="m_length" value="4">
+            </div>
         </div>
     </div>
 </div>
@@ -201,42 +118,8 @@
     const DEFAULT_TREES = ['スギ', 'ヒノキ', '他針', '他広'];
     
     let currentSettings = { customTrees: [] };
-    let currentMode = 'camera'; 
     
-    let calcDiameterStr = "";
-    let calcLength = 4;
-
-    window.onload = function() {
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('./sw.js').then(reg => {
-                console.log('SW registered!', reg);
-            }).catch(err => console.log('SW fail', err));
-        }
-
-        loadSettings();
-        renderTable();
-        
-        const container = document.getElementById('customTreeInputs');
-        for(let i=1; i<=5; i++){
-            container.innerHTML += `<input type="text" id="customTree${i}" placeholder="追加${i}" style="margin-bottom:5px;">`;
-        }
-        initVoice();
-        initCamera(); 
-    };
-
-    // --- モード切替 ---
-    function switchMode(mode) {
-        currentMode = mode;
-        document.getElementById('viewCamera').style.display = mode === 'camera' ? 'block' : 'none';
-        document.getElementById('viewVoice').style.display = mode === 'voice' ? 'block' : 'none';
-        document.getElementById('viewCalc').style.display = mode === 'calc' ? 'block' : 'none';
-
-        document.getElementById('tabCamera').classList.toggle('tab-active', mode === 'camera');
-        document.getElementById('tabVoice').classList.toggle('tab-active', mode === 'voice');
-        document.getElementById('tabCalc').classList.toggle('tab-active', mode === 'calc');
-    }
-
-    // --- カメラ & 丸太AI 処理 ---
+    // --- カメラ & AI 状態管理 ---
     const video = document.getElementById('webcam');
     const canvas = document.getElementById('overlay');
     const ctx = canvas.getContext('2d');
@@ -244,61 +127,66 @@
     
     let logModel;
     let isAILunning = false;
+    let isFrozen = false; // シャッター状態を管理するフラグ
     let cameraStream;
-    let facingMode = "environment";
+
+    window.onload = function() {
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW fail', err));
+        }
+        loadSettings();
+        renderTable();
+        
+        const container = document.getElementById('customTreeInputs');
+        for(let i=1; i<=5; i++){
+            container.innerHTML += `<input type="text" id="customTree${i}" placeholder="追加${i}" style="margin-bottom:5px;">`;
+        }
+        initCamera(); 
+    };
 
     async function initCamera() {
         try {
             if(cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); }
-            
-            // AQUOS（Android）での処理落ちを防ぐため、解像度の上限を厳格に指定します
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { 
-                    facingMode: facingMode, 
-                    width: { ideal: 640, max: 640 },  
-                    height: { ideal: 480, max: 480 } 
-                },
+                video: { facingMode: "environment", width: { ideal: 640, max: 640 }, height: { ideal: 480, max: 480 } },
                 audio: false
             });
-            
             video.srcObject = stream;
             cameraStream = stream;
             
-            // Android Chromeで確実に映像ストリームを処理させるためのおまじない
             video.setAttribute('autoplay', '');
             video.setAttribute('muted', '');
             video.setAttribute('playsinline', '');
             
             video.onloadedmetadata = () => {
-                video.play(); // 明示的に再生をキックする
-                
-                // 実際の映像サイズに合わせてキャンバスを調整
+                video.play();
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
                 camStatus.style.display = "none";
-                
-                console.log(`カメラ解像度: ${video.videoWidth} x ${video.videoHeight}`);
             };
         } catch (err) {
             camStatus.innerText = "カメラ起動失敗: " + err.message;
         }
     }
 
-    function switchCamera() {
-        facingMode = facingMode === "user" ? "environment" : "user";
-        initCamera();
-    }
-
+    // --- AI制御 ---
     async function toggleAI() {
         const btn = document.getElementById('aiStartBtn');
+        const shutterBtn = document.getElementById('shutterBtn');
+
         if(isAILunning) {
+            // AI停止時の処理
             isAILunning = false;
-            btn.innerText = "🚀 丸太検知スタート";
+            if(isFrozen) toggleShutter(); // フリーズ中なら解除する
+            
+            btn.innerText = "🚀 検知スタート";
             btn.style.background = "#1565c0";
+            shutterBtn.style.display = "none";
             ctx.clearRect(0, 0, canvas.width, canvas.height);
         } else {
+            // AI起動時の処理
             isAILunning = true;
-            btn.innerText = "⏳ モデル読込中...";
+            btn.innerText = "⏳ 読込中...";
             btn.style.background = "#d32f2f";
             
             if(!logModel) {
@@ -306,56 +194,77 @@
                     const rf = await window.roboflow.auth({
                         publishable_key: "rf_sRyNyDbysrbVYyp2FNCslDCxdpN2"
                     });
-                    
                     logModel = await rf.load({
                         model: "my-first-project-bjosg",
                         version: 4
                     });
-                    console.log("丸太モデルの読み込み完了！");
                 } catch (e) {
-                    alert("モデルの読み込みに失敗しました: " + (e.message || e));
+                    alert("モデル読込失敗: " + (e.message || e));
                     isAILunning = false;
-                    btn.innerText = "🚀 丸太検知スタート";
+                    btn.innerText = "🚀 検知スタート";
                     btn.style.background = "#1565c0";
                     return;
                 }
             }
             
             btn.innerText = "■ AI停止";
+            shutterBtn.style.display = "block"; // シャッターボタンを表示
             detectFrame();
         }
     }
 
+    // --- シャッター（フリーズ）機能 ---
+    function toggleShutter() {
+        if (!isAILunning) return;
+        
+        const shutterBtn = document.getElementById('shutterBtn');
+        const calibArea = document.getElementById('calibration-area');
+
+        if (isFrozen) {
+            // フリーズ解除（再撮影）
+            isFrozen = false;
+            video.play(); // カメラ映像を再開
+            shutterBtn.innerText = "📸 シャッター";
+            shutterBtn.style.background = "#e65100";
+            calibArea.style.display = "none";
+            detectFrame(); // 検知ループ再開
+        } else {
+            // フリーズ実行
+            isFrozen = true;
+            video.pause(); // カメラ映像を停止（この瞬間の画像が固定される）
+            shutterBtn.innerText = "🔄 やり直し";
+            shutterBtn.style.background = "#6c757d";
+            calibArea.style.display = "block";
+            // detectFrameループは isFrozen が true になることで自然に止まります
+        }
+    }
+
     async function detectFrame() {
-        if(!isAILunning) return;
+        // フリーズ中、またはAI停止中は処理を回さない（現在のキャンバスを残す）
+        if(!isAILunning || isFrozen) return; 
+
         if(video.readyState === 4 && logModel) {
-            // Roboflowモデルで推論
             const predictions = await logModel.detect(video);
             
-            // 【重要】実際のビデオの表示サイズを取得してキャンバスを合わせる
             const rect = video.getBoundingClientRect();
             canvas.width = rect.width;
             canvas.height = rect.height;
             
-            // 【重要】カメラの生解像度と、画面の表示サイズの「倍率」を計算する
             const scaleX = rect.width / video.videoWidth;
             const scaleY = rect.height / video.videoHeight;
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
             predictions.forEach(p => {
-                // 【重要】AIが出した座標に、計算した倍率を掛けてズレを直す
                 const w = p.bbox.width * scaleX;
                 const h = p.bbox.height * scaleY;
                 const x = (p.bbox.x * scaleX) - (w / 2);
                 const y = (p.bbox.y * scaleY) - (h / 2);
                 
-                // 丸太を囲む枠線の設定（見やすい紫色に変更）
                 ctx.strokeStyle = '#9932CC'; 
                 ctx.lineWidth = 3;
                 ctx.strokeRect(x, y, w, h);
 
-                // ラベル（log）と確信度のテキストを描画
                 ctx.fillStyle = '#9932CC';
                 ctx.font = '16px Arial';
                 const text = `${p.class} ${Math.round(p.confidence * 100)}%`;
@@ -367,64 +276,10 @@
                 ctx.fillText(text, x + 2, y - 5);
             });
         }
-        // requestAnimationFrame を setTimeout に変更し、300ミリ秒（0.3秒）の待機を入れます
         setTimeout(detectFrame, 300);
     }
 
-    // --- 既存の保存・音声・電卓ロジック（そのまま） ---
-    let lastUtterance = null;
-    function speakText(text) {
-        if (!window.speechSynthesis) return;
-        window.speechSynthesis.cancel();
-        const uttr = new SpeechSynthesisUtterance(text);
-        uttr.lang = 'ja-JP';
-        const voices = window.speechSynthesis.getVoices();
-        const jaVoice = voices.find(v => v.lang.includes('ja'));
-        if (jaVoice) uttr.voice = jaVoice;
-        lastUtterance = uttr;
-        uttr.onend = function() { lastUtterance = null; };
-        window.speechSynthesis.speak(uttr);
-    }
-
-    function saveData(source) {
-        let tree, len, dia, memo = "";
-        if (source === 'voice') {
-            tree = document.getElementById('v_treeType').value;
-            len = parseFloat(document.getElementById('v_length').value);
-            dia = parseFloat(document.getElementById('v_diameter').value);
-            memo = document.getElementById('v_memo').value;
-        } else {
-            tree = document.getElementById('c_treeType').value;
-            len = calcLength;
-            dia = parseFloat(calcDiameterStr);
-        }
-        if (!len || !dia) return alert("材長または直径が未入力です");
-
-        let vol = 0;
-        if (len < 6) {
-            vol = (dia * dia * len) / 10000;
-        } else {
-            const L_prime = Math.floor(len);
-            const factor = dia + (L_prime - 4) / 2;
-            vol = (factor * factor * len) / 10000;
-        }
-        vol = Math.round(vol * 1000) / 1000;
-
-        const list = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-        list.unshift({ id: Date.now(), tree, length: len, diameter: dia, volume: vol, memo, mode: source });
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-
-        if(source === 'voice') speakText(`${tree}、長さ${len}、直径${dia}、保存しました`);
-        
-        if (source === 'voice') {
-            document.getElementById('v_diameter').value = "";
-            document.getElementById('v_memo').value = "";
-        } else {
-            clearCalc();
-        }
-        renderTable();
-    }
-
+    // --- 以下、テーブル・設定関連の既存ロジック ---
     function renderTable() {
         const list = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
         const tbody = document.querySelector('#dataTable tbody');
@@ -451,28 +306,13 @@
         renderTable();
     }
 
-    function numInput(num) {
-        if (num === 'BS') { calcDiameterStr = calcDiameterStr.slice(0, -1); } 
-        else if (calcDiameterStr.length < 3) { calcDiameterStr += num; }
-        document.getElementById('c_diameter_disp').innerText = calcDiameterStr === "" ? "0" : calcDiameterStr;
-    }
-
-    function clearCalc() {
-        calcDiameterStr = "";
-        document.getElementById('c_diameter_disp').innerText = "0";
-    }
-
-    function addLength(val) {
-        calcLength += val;
-        if(calcLength < 1) calcLength = 1; 
-        document.getElementById('c_length_disp').innerText = calcLength;
-    }
-
     function openSettings() {
         for(let i=1; i<=5; i++){ document.getElementById(`customTree${i}`).value = currentSettings.customTrees[i-1] || ""; }
         document.getElementById('settingsModal').style.display = 'block';
     }
+    
     function closeSettings() { document.getElementById('settingsModal').style.display = 'none'; }
+    
     function saveSettings() {
         let newTrees = [];
         for(let i=1; i<=5; i++){
@@ -505,73 +345,13 @@
         const list = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
         if(list.length === 0) return alert("データがありません");
         let csv = "\ufeff樹種,材長,末口直径,材積,備考\n";
-        list.forEach(i => csv += `${i.tree},${i.length},${i.diameter},${i.volume},${i.memo}\n`);
+        list.forEach(i => csv += `${i.tree},${i.length},${i.diameter},${i.volume},${i.memo || ''}\n`);
         const a = document.createElement("a");
         const now = new Date();
         a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
         a.download = `丸太検知-${now.getFullYear()}${(now.getMonth()+1).toString().padStart(2,'0')}${now.getDate().toString().padStart(2,'0')}-${now.getHours().toString().padStart(2,'0')}${now.getMinutes().toString().padStart(2,'0')}.csv`;
         a.click();
     }
-
-    let recognition;
-    let isMicOn = false;
-    const kanjiNumMap = { '一':1, '二':2, '三':3, '四':4, '五':5, '六':6, '七':7, '八':8, '九':9, '〇':0, '零':0 };
-    function textToNum(text) {
-        text = text.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/[一二三四五六七八九〇]/g, s => kanjiNumMap[s]);
-        const match = text.match(/\d+/);
-        return match ? match[0] : null;
-    }
-
-    function initVoice() {
-        if (!window.webkitSpeechRecognition && !window.SpeechRecognition) return document.getElementById('voiceStatus').innerText = "音声非対応";
-        const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
-        recognition = new Speech();
-        recognition.lang = 'ja-JP';
-        recognition.continuous = true;
-        recognition.onresult = function(e) {
-            const text = e.results[e.results.length - 1][0].transcript;
-            document.getElementById('voiceStatus').innerText = "認識: " + text;
-            parseVoice(text);
-        };
-        recognition.onend = function() { if(isMicOn) recognition.start(); };
-    }
-
-    function toggleMic() {
-        if(!recognition) return;
-        isMicOn = !isMicOn;
-        const btn = document.querySelector('.btn-mic');
-        const status = document.getElementById('voiceStatus');
-        if(isMicOn) {
-            if(window.speechSynthesis) window.speechSynthesis.speak(new SpeechSynthesisUtterance(''));
-            recognition.start();
-            btn.style.background = "#d32f2f"; btn.innerText = "■ 停止";
-            status.innerText = "聞いています..."; status.classList.add('listening');
-        } else {
-            recognition.stop();
-            btn.style.background = "#8b4513"; btn.innerText = "🎤 開始";
-            status.innerText = "待機中"; status.classList.remove('listening');
-        }
-    }
-
-    function parseVoice(text) {
-        if(text.includes("保存") || text.includes("ほぞん")) return saveData('voice');
-        const treeSel = document.getElementById('v_treeType');
-        if(text.includes("すぎ") || text.includes("スギ")) { treeSel.value = "スギ"; speakText("スギ"); }
-        else if(text.includes("ひのき") || text.includes("ヒノキ")) { treeSel.value = "ヒノキ"; speakText("ヒノキ"); }
-        
-        if(text.includes("長さ") || text.includes("ながさ")) {
-            const num = textToNum(text);
-            if(num) { document.getElementById('v_length').value = num; speakText("長さ " + num); }
-        } else if(text.includes("直径") || text.includes("ちょっけい") || text.includes("センチ")) {
-            const num = textToNum(text);
-            if(num) { document.getElementById('v_diameter').value = num; speakText("直径 " + num); }
-        } else if(text.includes("メモ") || text.includes("めも")) {
-            let memoContent = text.replace(/.*(メモ|めも)/, "").trim().replace("まがり", "曲り");
-            document.getElementById('v_memo').value = memoContent; speakText("備考 " + memoContent);
-        }
-    }
 </script>
 </body>
 </html>
-
-
