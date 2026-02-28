@@ -60,7 +60,7 @@
 
 <div class="card">
     <div class="header-area">
-        <h2>AI検尺アプリ Ver 1.1</h2>
+        <h2>AI検尺アプリ Ver 1.2</h2>
         <button class="settings-btn" onclick="openSettings()">⚙️ 設定</button>
     </div>
 
@@ -153,12 +153,6 @@
     let cameraStream;
     let currentBoxes = []; 
     
-    // ★バースト検知（20回スキャン）用の設定
-    let isAccumulating = false;
-    let accumulateCount = 0;
-    const MAX_ACCUMULATE = 20; 
-    let accumulatedBoxes = [];
-
     let currentModalMode = 'base'; 
     let selectedBoxForCalc = null;
     let addTargetX = 0;
@@ -223,7 +217,7 @@
 
         if(isAILunning) {
             isAILunning = false;
-            if(isFrozen || isAccumulating) resetShutter(); 
+            if(isFrozen) resetShutter(); 
             
             btn.innerText = "🚀 検知スタート";
             btn.style.background = "#1565c0";
@@ -263,13 +257,19 @@
     function resetShutter() {
         const shutterBtn = document.getElementById('shutterBtn');
         const calibArea = document.getElementById('calibration-area');
+        
         isFrozen = false;
         isCalculated = false;
-        isAccumulating = false;
-        video.play(); // カメラ映像を再開
+        currentBoxes = [];
+        ctx.clearRect(0, 0, canvas.width, canvas.height); // 画面を綺麗にお掃除
+        
+        video.play().catch(e => console.error("Video play error:", e)); 
+        
         shutterBtn.innerText = "📸 撮影＆検知";
         shutterBtn.style.background = "#e65100";
         calibArea.style.display = "none";
+        
+        detectFrame(); // リアルタイム検知を再開
     }
 
     function toggleShutter() {
@@ -279,25 +279,61 @@
         const calibArea = document.getElementById('calibration-area');
         const calibMsg = document.getElementById('calibMsg');
 
-        if (isFrozen || isAccumulating) {
+        if (isFrozen) {
             // フリーズ中ならリセットして次へ
             resetShutter();
-            detectFrame(); 
         } else {
-            // ★撮影ボタンを押した瞬間の処理
-            isAccumulating = true;
-            accumulateCount = 0;
-            accumulatedBoxes = [];
-            
-            // ★【重要】押した瞬間にカメラ映像をピタッと止める（手ブレ防止）
+            // ★押した瞬間にカメラ映像をピタッと止める（手ブレ完全防止）
+            isFrozen = true;
             video.pause(); 
             
             shutterBtn.innerText = "⏳ スキャン中...";
             shutterBtn.style.background = "#d32f2f";
             calibArea.style.display = "block";
-            calibMsg.innerHTML = `⏳ 高精度スキャンを実行中（20回）...`;
+            calibMsg.innerHTML = `⏳ 高精度スキャンを実行中...`;
             calibMsg.style.color = "#d32f2f";
+            
+            // 止まった美しい静止画に対して、一撃必殺のAIスキャンを行う
+            runSingleHighAccuracyScan();
         }
+    }
+
+    // ★止まった静止画に対する一撃必殺スキャン
+    async function runSingleHighAccuracyScan() {
+        if(!logModel) return;
+        
+        const predictions = await logModel.detect(video);
+        
+        const rect = video.getBoundingClientRect();
+        canvas.width = rect.width;
+        canvas.height = rect.height;
+        
+        const scaleX = rect.width / video.videoWidth;
+        const scaleY = rect.height / video.videoHeight;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        currentBoxes = []; 
+        
+        predictions.forEach(p => {
+            const w = p.bbox.width * scaleX;
+            const h = p.bbox.height * scaleY;
+            const x = (p.bbox.x * scaleX) - (w / 2);
+            const y = (p.bbox.y * scaleY) - (h / 2);
+            
+            const text = `${p.class} ${Math.round(p.confidence * 100)}%`;
+            const textWidth = ctx.measureText(text).width;
+            const boxInfo = { x, y, w, h, text, textWidth };
+            currentBoxes.push(boxInfo);
+            
+            drawBox(boxInfo, '#9932CC'); 
+        });
+        
+        const shutterBtn = document.getElementById('shutterBtn');
+        const calibMsg = document.getElementById('calibMsg');
+        shutterBtn.innerText = "🔄 やり直し";
+        shutterBtn.style.background = "#6c757d";
+        calibMsg.innerHTML = `✅ 完了！画面内の<b>基準となる丸太の枠をタップ</b>してください。`;
+        calibMsg.style.color = "#e65100";
     }
 
     function drawBox(box, color) {
@@ -311,31 +347,9 @@
         ctx.fillText(box.text, box.x + 2, box.y - 5);
     }
 
-    function mergeBoxes(boxes) {
-        const merged = [];
-        const threshold = 30; 
-        
-        boxes.forEach(b => {
-            const cx = b.x + b.w / 2;
-            const cy = b.y + b.h / 2;
-            let found = false;
-            for(let mb of merged) {
-                const mcx = mb.x + mb.w / 2;
-                const mcy = mb.y + mb.h / 2;
-                const dist = Math.sqrt(Math.pow(cx - mcx, 2) + Math.pow(cy - mcy, 2));
-                if (dist < threshold) {
-                    found = true;
-                    break;
-                }
-            }
-            if(!found) merged.push(b);
-        });
-        return merged;
-    }
-
+    // リアルタイムのピコピコ検知（フリーズしていない時だけ動く）
     async function detectFrame() {
-        // AI停止中、または（フリーズ中でかつスキャン中でもない）場合は回さない
-        if(!isAILunning || (isFrozen && !isAccumulating)) return; 
+        if(!isAILunning || isFrozen) return; 
 
         if(video.readyState === 4 && logModel) {
             const predictions = await logModel.detect(video);
@@ -343,77 +357,36 @@
             const rect = video.getBoundingClientRect();
             canvas.width = rect.width;
             canvas.height = rect.height;
-            
             const scaleX = rect.width / video.videoWidth;
             const scaleY = rect.height / video.videoHeight;
 
-            if (!isAccumulating) {
-                // 通常のリアルタイム検知（ピコピコ動く）
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                currentBoxes = []; 
-                predictions.forEach(p => {
-                    const w = p.bbox.width * scaleX;
-                    const h = p.bbox.height * scaleY;
-                    const x = (p.bbox.x * scaleX) - (w / 2);
-                    const y = (p.bbox.y * scaleY) - (h / 2);
-                    const text = `${p.class} ${Math.round(p.confidence * 100)}%`;
-                    const textWidth = ctx.measureText(text).width;
-                    const boxInfo = { x, y, w, h, text, textWidth };
-                    currentBoxes.push(boxInfo);
-                    drawBox(boxInfo, '#9932CC'); 
-                });
-            } else {
-                // ★バーストスキャン中（映像は止まっている状態で20回推論）
-                predictions.forEach(p => {
-                    const w = p.bbox.width * scaleX;
-                    const h = p.bbox.height * scaleY;
-                    const x = (p.bbox.x * scaleX) - (w / 2);
-                    const y = (p.bbox.y * scaleY) - (h / 2);
-                    const text = `${p.class}`;
-                    const textWidth = ctx.measureText(text).width;
-                    accumulatedBoxes.push({ x, y, w, h, text, textWidth });
-                });
-                
-                accumulateCount++;
-                
-                if (accumulateCount >= MAX_ACCUMULATE) {
-                    // 20回のスキャン完了！
-                    isAccumulating = false;
-                    isFrozen = true;
-                    
-                    currentBoxes = mergeBoxes(accumulatedBoxes);
-                    
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
-                    currentBoxes.forEach(b => drawBox(b, '#9932CC'));
-                    
-                    const shutterBtn = document.getElementById('shutterBtn');
-                    const calibMsg = document.getElementById('calibMsg');
-                    shutterBtn.innerText = "🔄 やり直し";
-                    shutterBtn.style.background = "#6c757d";
-                    calibMsg.innerHTML = `✅ 完了！画面内の<b>基準となる丸太の枠をタップ</b>してください。`;
-                    calibMsg.style.color = "#e65100";
-                }
-            }
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            currentBoxes = []; 
+            
+            predictions.forEach(p => {
+                const w = p.bbox.width * scaleX;
+                const h = p.bbox.height * scaleY;
+                const x = (p.bbox.x * scaleX) - (w / 2);
+                const y = (p.bbox.y * scaleY) - (h / 2);
+                const text = `${p.class} ${Math.round(p.confidence * 100)}%`;
+                const textWidth = ctx.measureText(text).width;
+                const boxInfo = { x, y, w, h, text, textWidth };
+                currentBoxes.push(boxInfo);
+                drawBox(boxInfo, '#9932CC'); 
+            });
         }
-        setTimeout(detectFrame, 100); // 蓄積中は高速で回す
+        setTimeout(detectFrame, 250); 
     }
 
-    // --- 【重要】キャンバスタップ時の処理（基準入力 ＆ 手動追加） ---
-    // ※長押しの煩わしさを無くし、すべて「タップ」で完結するようにしました
+    // --- 【重要】基準丸太のタップ検知（クリック） ---
     canvas.addEventListener('click', (e) => {
-        if (!isFrozen || currentBoxes.length === 0) return;
+        // 計算完了後は長押しで追加するため、ここでのクリックは無視
+        if (!isFrozen || currentBoxes.length === 0 || isCalculated) return;
 
         const rect = canvas.getBoundingClientRect();
         const clickX = e.clientX - rect.left;
         const clickY = e.clientY - rect.top;
 
-        // ★ 計算完了（緑ドット表示）後のタップは、「手動追加」として処理
-        if (isCalculated) {
-            openDiaModal(null, 'manual_add', clickX, clickY);
-            return; // ここで終了
-        }
-
-        // --- 以下は計算前（紫枠表示）の「基準丸太」のタップ処理 ---
         let clickedBox = null;
         for (let i = currentBoxes.length - 1; i >= 0; i--) {
             let box = currentBoxes[i];
@@ -432,6 +405,37 @@
         }
     });
 
+    // --- ★ 復活！手動追加の長押し検知（0.5秒） ---
+    let pressTimer;
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+    function startPress(e) {
+        if (!isCalculated) return; // 計算前は動かない
+        let clientX, clientY;
+        if (e.type.includes('touch')) {
+            clientX = e.touches[0].clientX;
+            clientY = e.touches[0].clientY;
+        } else {
+            clientX = e.clientX;
+            clientY = e.clientY;
+        }
+        const rect = canvas.getBoundingClientRect();
+        const clickX = clientX - rect.left;
+        const clickY = clientY - rect.top;
+
+        // 0.5秒間押し続けたら手動追加モーダルを開く
+        pressTimer = setTimeout(() => {
+            openDiaModal(null, 'manual_add', clickX, clickY);
+        }, 500);
+    }
+    function cancelPress() { clearTimeout(pressTimer); }
+    
+    canvas.addEventListener('mousedown', startPress);
+    canvas.addEventListener('touchstart', startPress, {passive: false});
+    canvas.addEventListener('mouseup', cancelPress);
+    canvas.addEventListener('mouseleave', cancelPress);
+    canvas.addEventListener('touchend', cancelPress);
+
     // --- モーダル制御 ---
     function openDiaModal(box, mode, x = 0, y = 0) {
         currentModalMode = mode;
@@ -447,7 +451,7 @@
             addTargetX = x;
             addTargetY = y;
             modalTitle.innerText = "手動で丸太を追加";
-            modalDesc.innerText = "タップした場所の丸太の直径(cm)を選択してください。";
+            modalDesc.innerText = "長押しした場所の丸太の直径(cm)を選択してください。";
             modalTitle.style.color = "#1565c0"; 
         }
         document.getElementById('diameterModal').style.display = 'block';
@@ -509,18 +513,16 @@
 
         localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
         renderTable();
-        isCalculated = true; // 計算完了フラグを立てる
+        isCalculated = true; 
         
         const calibMsg = document.getElementById('calibMsg');
-        calibMsg.innerHTML = `✅ ${addedCount}本を保存しました！<br><b>見逃しがあれば、そこを「タップ」するだけで手動追加できます。</b>`;
+        calibMsg.innerHTML = `✅ ${addedCount}本を保存しました！<br><b>見逃しがあれば、そこを「長押し(0.5秒)」で手動追加できます。</b>`;
         calibMsg.style.color = "#388e3c"; 
 
-        // ★ボタンを「次の撮影へ」に変更してわかりやすく
         const shutterBtn = document.getElementById('shutterBtn');
         shutterBtn.innerText = "🔄 次の撮影へ（リセット）";
-        shutterBtn.style.background = "#1565c0"; // 青色にして「次へ進む」感を出す
+        shutterBtn.style.background = "#1565c0"; 
 
-        // スクショの自動保存を実行
         autoSaveScreenshotWithGPS();
     }
 
@@ -534,9 +536,9 @@
         localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
         renderTable();
 
-        drawDotAndText(cx, cy, diaCm, '#00FFFF'); // 水色の点で描画
+        drawDotAndText(cx, cy, diaCm, '#00FFFF'); 
         
-        document.getElementById('calibMsg').innerHTML = `✅ 手動で1本（${diaCm}cm）を追加しました！<br>さらにタップで追加、または「🔄次の撮影へ」で進みます。`;
+        document.getElementById('calibMsg').innerHTML = `✅ 手動で1本（${diaCm}cm）を追加しました！<br>さらに長押しで追加、または「🔄次の撮影へ」で進みます。`;
     }
 
     function calculateVolume(dia, len) {
@@ -553,7 +555,6 @@
         ctx.lineWidth = 3; ctx.strokeText(`${text}`, x + 8, y + 6); ctx.fillText(`${text}`, x + 8, y + 6);
     }
 
-    // --- ★ 全自動スクショ保存＆GPS書き込み機能 ---
     function autoSaveScreenshotWithGPS() {
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
@@ -601,7 +602,6 @@
         link.click();
     }
 
-    // --- 以下、テーブル設定等 ---
     function renderTable() {
         const list = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
         const tbody = document.querySelector('#dataTable tbody');
@@ -609,7 +609,6 @@
         let totalC = 0, totalV = 0;
         list.forEach(item => {
             totalC++; totalV += item.volume;
-            // 手動追加の行は少し色を変える
             const rowColor = item.memo === '手動追加' ? 'background-color: #e0f7fa;' : '';
             tbody.innerHTML += `<tr style="${rowColor}"><td>${item.tree}</td><td>${item.length}</td><td>${item.diameter}</td><td>${item.volume.toFixed(3)}</td><td><button class="btn-del" onclick="deleteItem(${item.id})">×</button></td></tr>`;
         });
