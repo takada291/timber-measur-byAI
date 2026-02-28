@@ -28,7 +28,9 @@
         #camera-container { position: relative; width: 100%; border-radius: 8px; overflow: hidden; background: #000; display: flex; justify-content: center; align-items: center; min-height: 250px; }
         video { width: 100%; height: auto; display: block; }
         canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; }
-        .camera-controls { display: flex; justify-content: space-between; margin-top: 10px; gap: 10px; }
+        
+        /* ボタンを上に配置するための調整 */
+        .camera-controls { display: flex; justify-content: space-between; margin-bottom: 10px; gap: 10px; }
         .btn-ai-start { flex: 1; background: #1565c0; color: white; padding: 12px; border: none; border-radius: 6px; font-weight: bold; font-size: 1rem; }
         .btn-shutter { flex: 1; background: #e65100; color: white; padding: 12px; border: none; border-radius: 6px; font-weight: bold; font-size: 1rem; display: none; }
 
@@ -56,23 +58,24 @@
 
 <div class="card">
     <div class="header-area">
-        <h2>AI検知 0.6</h2>
+        <h2>AI検知 0.7</h2>
         <button class="settings-btn" onclick="openSettings()">⚙️ 設定</button>
     </div>
 
     <div id="viewCamera">
-        <div id="camera-container">
-            <video id="webcam" autoplay playsinline muted></video>
-            <canvas id="overlay"></canvas>
-            <div id="camStatus" style="position: absolute; color: white; z-index: 20;">カメラ起動待ち...</div>
-        </div>
         <div class="camera-controls">
             <button class="btn-ai-start" id="aiStartBtn" onclick="toggleAI()">🚀 検知スタート</button>
             <button class="btn-shutter" id="shutterBtn" onclick="toggleShutter()">📸 シャッター</button>
         </div>
         
+        <div id="camera-container">
+            <video id="webcam" autoplay playsinline muted></video>
+            <canvas id="overlay"></canvas>
+            <div id="camStatus" style="position: absolute; color: white; z-index: 20;">カメラ起動待ち...</div>
+        </div>
+        
         <div id="calibration-area">
-            <p class="calib-message">✅ 画面を固定しました。<br>基準となる丸太の枠をタップしてください。(※準備中)</p>
+            <p class="calib-message">✅ 画面を固定しました。<br>画面内の基準となる丸太の枠を<b>直接タップ</b>してください。</p>
             <div class="input-row">
                 <label>一括設定: 樹種</label>
                 <select id="m_treeType" class="tree-selector"></select>
@@ -127,8 +130,9 @@
     
     let logModel;
     let isAILunning = false;
-    let isFrozen = false; // シャッター状態を管理するフラグ
+    let isFrozen = false; 
     let cameraStream;
+    let currentBoxes = []; // 画面に描画されている枠の情報を保存する配列
 
     window.onload = function() {
         if ('serviceWorker' in navigator) {
@@ -169,22 +173,20 @@
         }
     }
 
-    // --- AI制御 ---
     async function toggleAI() {
         const btn = document.getElementById('aiStartBtn');
         const shutterBtn = document.getElementById('shutterBtn');
 
         if(isAILunning) {
-            // AI停止時の処理
             isAILunning = false;
-            if(isFrozen) toggleShutter(); // フリーズ中なら解除する
+            if(isFrozen) toggleShutter(); 
             
             btn.innerText = "🚀 検知スタート";
             btn.style.background = "#1565c0";
             shutterBtn.style.display = "none";
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            currentBoxes = [];
         } else {
-            // AI起動時の処理
             isAILunning = true;
             btn.innerText = "⏳ 読込中...";
             btn.style.background = "#d32f2f";
@@ -208,12 +210,11 @@
             }
             
             btn.innerText = "■ AI停止";
-            shutterBtn.style.display = "block"; // シャッターボタンを表示
+            shutterBtn.style.display = "block";
             detectFrame();
         }
     }
 
-    // --- シャッター（フリーズ）機能 ---
     function toggleShutter() {
         if (!isAILunning) return;
         
@@ -221,26 +222,36 @@
         const calibArea = document.getElementById('calibration-area');
 
         if (isFrozen) {
-            // フリーズ解除（再撮影）
             isFrozen = false;
-            video.play(); // カメラ映像を再開
+            video.play(); 
             shutterBtn.innerText = "📸 シャッター";
             shutterBtn.style.background = "#e65100";
             calibArea.style.display = "none";
-            detectFrame(); // 検知ループ再開
+            detectFrame(); 
         } else {
-            // フリーズ実行
             isFrozen = true;
-            video.pause(); // カメラ映像を停止（この瞬間の画像が固定される）
+            video.pause(); 
             shutterBtn.innerText = "🔄 やり直し";
             shutterBtn.style.background = "#6c757d";
             calibArea.style.display = "block";
-            // detectFrameループは isFrozen が true になることで自然に止まります
         }
     }
 
+    // --- 枠を描画する共通関数 ---
+    function drawBox(box, color) {
+        ctx.strokeStyle = color; 
+        ctx.lineWidth = 3;
+        ctx.strokeRect(box.x, box.y, box.w, box.h);
+
+        ctx.fillStyle = color;
+        ctx.font = '16px Arial';
+        ctx.fillRect(box.x, box.y - 20, box.textWidth + 4, 20);
+        
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillText(box.text, box.x + 2, box.y - 5);
+    }
+
     async function detectFrame() {
-        // フリーズ中、またはAI停止中は処理を回さない（現在のキャンバスを残す）
         if(!isAILunning || isFrozen) return; 
 
         if(video.readyState === 4 && logModel) {
@@ -254,6 +265,7 @@
             const scaleY = rect.height / video.videoHeight;
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            currentBoxes = []; // 毎フレーム配列をリセット
             
             predictions.forEach(p => {
                 const w = p.bbox.width * scaleX;
@@ -261,22 +273,114 @@
                 const x = (p.bbox.x * scaleX) - (w / 2);
                 const y = (p.bbox.y * scaleY) - (h / 2);
                 
-                ctx.strokeStyle = '#9932CC'; 
-                ctx.lineWidth = 3;
-                ctx.strokeRect(x, y, w, h);
-
-                ctx.fillStyle = '#9932CC';
                 ctx.font = '16px Arial';
                 const text = `${p.class} ${Math.round(p.confidence * 100)}%`;
-                
                 const textWidth = ctx.measureText(text).width;
-                ctx.fillRect(x, y - 20, textWidth + 4, 20);
                 
-                ctx.fillStyle = '#FFFFFF';
-                ctx.fillText(text, x + 2, y - 5);
+                // 後でタップ判定できるように枠のデータを保存
+                const boxInfo = { x, y, w, h, text, textWidth };
+                currentBoxes.push(boxInfo);
+                
+                drawBox(boxInfo, '#9932CC'); // 紫色で描画
             });
         }
         setTimeout(detectFrame, 300);
+    }
+
+    // --- 【超重要】キャンバスのタップ検知と一括計算機能 ---
+    canvas.addEventListener('click', (e) => {
+        // 時が止まっていない（フリーズしていない）、または枠がない場合は無視
+        if (!isFrozen || currentBoxes.length === 0) return;
+
+        // タップした座標を計算
+        const rect = canvas.getBoundingClientRect();
+        const clickX = e.clientX - rect.left;
+        const clickY = e.clientY - rect.top;
+
+        // タップした場所にある丸太の枠を探す（重なっている場合は一番手前のもの）
+        let clickedBox = null;
+        for (let i = currentBoxes.length - 1; i >= 0; i--) {
+            let box = currentBoxes[i];
+            if (clickX >= box.x && clickX <= box.x + box.w &&
+                clickY >= box.y && clickY <= box.y + box.h) {
+                clickedBox = box;
+                break;
+            }
+        }
+
+        // 丸太の枠をタップできた場合
+        if (clickedBox) {
+            // 一旦すべての枠を紫色で描き直す（前の選択を消すため）
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            currentBoxes.forEach(b => drawBox(b, '#9932CC'));
+            
+            // タップした枠だけをオレンジ色に光らせる
+            drawBox(clickedBox, '#e65100');
+
+            // 描画を待ってから入力ダイアログを出す
+            setTimeout(() => {
+                const realSizeStr = prompt("タップした丸太の実測直径(cm)を入力してください。\nこの値を基準に、画面内のすべての丸太の直径を自動計算します。", "14");
+                
+                // 数値が正しく入力されたら一括計算スタート！
+                if (realSizeStr && !isNaN(realSizeStr)) {
+                    calculateAllLogs(clickedBox, parseFloat(realSizeStr));
+                } else {
+                    // キャンセルされたら元の紫色に戻す
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    currentBoxes.forEach(b => drawBox(b, '#9932CC'));
+                }
+            }, 50);
+        }
+    });
+
+    // --- 一括計算＆登録処理 ---
+    function calculateAllLogs(baseBox, realSizeCm) {
+        // 【AIの魔法】1ピクセルが何センチかを計算する
+        const pxPerCm = baseBox.w / realSizeCm;
+        
+        const treeType = document.getElementById('m_treeType').value || "スギ";
+        const length = parseFloat(document.getElementById('m_length').value) || 4;
+
+        let addedCount = 0;
+        const list = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+
+        // 検知されたすべての丸太をループして計算
+        currentBoxes.forEach(box => {
+            // 直径の推定（ピクセル幅 ÷ 1cmあたりのピクセル数）
+            let estDia = Math.round(box.w / pxPerCm);
+            if(estDia < 1) estDia = 1; // 1cm未満のエラー防止
+
+            // 材積の計算（既存ロジックと同じ）
+            let vol = 0;
+            if (length < 6) {
+                vol = (estDia * estDia * length) / 10000;
+            } else {
+                const L_prime = Math.floor(length);
+                const factor = estDia + (L_prime - 4) / 2;
+                vol = (factor * factor * length) / 10000;
+            }
+            vol = Math.round(vol * 1000) / 1000;
+
+            // データに追加
+            list.unshift({ 
+                id: Date.now() + Math.random(), // 瞬時に複数入るので乱数を足す
+                tree: treeType, 
+                length: length, 
+                diameter: estDia, 
+                volume: vol, 
+                memo: 'AI推定' 
+            });
+            addedCount++;
+        });
+
+        // データを保存して表を更新
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+        renderTable();
+
+        alert(`${addedCount}本の丸太をデータに一括登録しました！`);
+        
+        // シャッターを解除して次の撮影へ
+        toggleShutter();
     }
 
     // --- 以下、テーブル・設定関連の既存ロジック ---
