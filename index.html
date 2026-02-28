@@ -29,7 +29,6 @@
         video { width: 100%; height: auto; display: block; }
         canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; }
         
-        /* ボタンを上に配置するための調整 */
         .camera-controls { display: flex; justify-content: space-between; margin-bottom: 10px; gap: 10px; }
         .btn-ai-start { flex: 1; background: #1565c0; color: white; padding: 12px; border: none; border-radius: 6px; font-weight: bold; font-size: 1rem; }
         .btn-shutter { flex: 1; background: #e65100; color: white; padding: 12px; border: none; border-radius: 6px; font-weight: bold; font-size: 1rem; display: none; }
@@ -58,7 +57,7 @@
 
 <div class="card">
     <div class="header-area">
-        <h2>AI検知 0.7</h2>
+        <h2>AI検知 0.8</h2>
         <button class="settings-btn" onclick="openSettings()">⚙️ 設定</button>
     </div>
 
@@ -75,7 +74,7 @@
         </div>
         
         <div id="calibration-area">
-            <p class="calib-message">✅ 画面を固定しました。<br>画面内の基準となる丸太の枠を<b>直接タップ</b>してください。</p>
+            <p class="calib-message" id="calibMsg">✅ 画面を固定しました。<br>画面内の基準となる丸太の枠を<b>直接タップ</b>してください。</p>
             <div class="input-row">
                 <label>一括設定: 樹種</label>
                 <select id="m_treeType" class="tree-selector"></select>
@@ -115,6 +114,24 @@
     </div>
 </div>
 
+<div id="diameterModal" class="modal">
+    <div class="modal-content">
+        <h3 style="margin-top:0; color:#e65100;">基準サイズ入力</h3>
+        <p style="font-size:0.9em; margin-bottom:15px;">タップした丸太の末口直径(cm)を選択してください。</p>
+        
+        <select id="diaSelect" style="margin-bottom:10px; font-size:1.2rem; padding:10px; width:100%;"></select>
+        
+        <div id="manualDiaDiv" style="display:none; margin-bottom:10px;">
+            <input type="number" id="manualDiaInput" placeholder="手入力 (cm)" style="font-size:1.2rem; padding:10px; width:100%;">
+        </div>
+        
+        <div style="display:flex; gap:10px; margin-top:15px;">
+            <button class="btn-del" style="flex:1; padding:12px; font-size:1rem;" onclick="closeDiaModal()">キャンセル</button>
+            <button class="btn-ai-start" style="flex:1; padding:12px; font-size:1rem; background:#388e3c;" onclick="confirmDiameter()">決定</button>
+        </div>
+    </div>
+</div>
+
 <script>
     const STORAGE_KEY = 'timber_doubsta_data';
     const SETTINGS_KEY = 'timber_doubsta_settings';
@@ -131,8 +148,10 @@
     let logModel;
     let isAILunning = false;
     let isFrozen = false; 
+    let isCalculated = false; // 一括計算が完了したかどうかのフラグ
     let cameraStream;
-    let currentBoxes = []; // 画面に描画されている枠の情報を保存する配列
+    let currentBoxes = []; 
+    let selectedBoxForCalc = null;
 
     window.onload = function() {
         if ('serviceWorker' in navigator) {
@@ -146,13 +165,31 @@
             container.innerHTML += `<input type="text" id="customTree${i}" placeholder="追加${i}" style="margin-bottom:5px;">`;
         }
         initCamera(); 
+        initDiameterDropdown();
     };
+
+    // プルダウンリストの生成
+    function initDiameterDropdown() {
+        const diaSelect = document.getElementById('diaSelect');
+        for(let i=10; i<=60; i+=2) {
+            diaSelect.appendChild(new Option(`${i} cm`, i));
+        }
+        diaSelect.appendChild(new Option('その他 (手入力)', 'manual'));
+        
+        // 14cmあたりを初期選択にしておく
+        diaSelect.value = "14";
+
+        diaSelect.addEventListener('change', (e) => {
+            document.getElementById('manualDiaDiv').style.display = e.target.value === 'manual' ? 'block' : 'none';
+        });
+    }
 
     async function initCamera() {
         try {
             if(cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); }
+            // AQUOS横向き対応のため、max制限を外し、idealのみで広めに要求する
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: "environment", width: { ideal: 640, max: 640 }, height: { ideal: 480, max: 480 } },
+                video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
                 audio: false
             });
             video.srcObject = stream;
@@ -220,15 +257,21 @@
         
         const shutterBtn = document.getElementById('shutterBtn');
         const calibArea = document.getElementById('calibration-area');
+        const calibMsg = document.getElementById('calibMsg');
 
         if (isFrozen) {
+            // フリーズ解除・再開
             isFrozen = false;
+            isCalculated = false; // 計算フラグもリセット
             video.play(); 
             shutterBtn.innerText = "📸 シャッター";
             shutterBtn.style.background = "#e65100";
             calibArea.style.display = "none";
+            calibMsg.innerHTML = `✅ 画面を固定しました。<br>画面内の基準となる丸太の枠を<b>直接タップ</b>してください。`;
+            calibMsg.style.color = "#e65100";
             detectFrame(); 
         } else {
+            // フリーズ（時を止める）
             isFrozen = true;
             video.pause(); 
             shutterBtn.innerText = "🔄 やり直し";
@@ -265,7 +308,7 @@
             const scaleY = rect.height / video.videoHeight;
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            currentBoxes = []; // 毎フレーム配列をリセット
+            currentBoxes = []; 
             
             predictions.forEach(p => {
                 const w = p.bbox.width * scaleX;
@@ -277,27 +320,24 @@
                 const text = `${p.class} ${Math.round(p.confidence * 100)}%`;
                 const textWidth = ctx.measureText(text).width;
                 
-                // 後でタップ判定できるように枠のデータを保存
                 const boxInfo = { x, y, w, h, text, textWidth };
                 currentBoxes.push(boxInfo);
                 
-                drawBox(boxInfo, '#9932CC'); // 紫色で描画
+                drawBox(boxInfo, '#9932CC'); 
             });
         }
         setTimeout(detectFrame, 300);
     }
 
-    // --- 【超重要】キャンバスのタップ検知と一括計算機能 ---
+    // --- 【キャンバスタップ時の処理】 ---
     canvas.addEventListener('click', (e) => {
-        // 時が止まっていない（フリーズしていない）、または枠がない場合は無視
-        if (!isFrozen || currentBoxes.length === 0) return;
+        // 時が止まっていない、枠がない、または既に計算済みの場合は反応しない
+        if (!isFrozen || currentBoxes.length === 0 || isCalculated) return;
 
-        // タップした座標を計算
         const rect = canvas.getBoundingClientRect();
         const clickX = e.clientX - rect.left;
         const clickY = e.clientY - rect.top;
 
-        // タップした場所にある丸太の枠を探す（重なっている場合は一番手前のもの）
         let clickedBox = null;
         for (let i = currentBoxes.length - 1; i >= 0; i--) {
             let box = currentBoxes[i];
@@ -308,49 +348,65 @@
             }
         }
 
-        // 丸太の枠をタップできた場合
         if (clickedBox) {
-            // 一旦すべての枠を紫色で描き直す（前の選択を消すため）
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             currentBoxes.forEach(b => drawBox(b, '#9932CC'));
-            
-            // タップした枠だけをオレンジ色に光らせる
-            drawBox(clickedBox, '#e65100');
+            drawBox(clickedBox, '#e65100'); // タップした枠をオレンジに
 
-            // 描画を待ってから入力ダイアログを出す
-            setTimeout(() => {
-                const realSizeStr = prompt("タップした丸太の実測直径(cm)を入力してください。\nこの値を基準に、画面内のすべての丸太の直径を自動計算します。", "14");
-                
-                // 数値が正しく入力されたら一括計算スタート！
-                if (realSizeStr && !isNaN(realSizeStr)) {
-                    calculateAllLogs(clickedBox, parseFloat(realSizeStr));
-                } else {
-                    // キャンセルされたら元の紫色に戻す
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
-                    currentBoxes.forEach(b => drawBox(b, '#9932CC'));
-                }
-            }, 50);
+            setTimeout(() => openDiaModal(clickedBox), 50);
         }
     });
 
-    // --- 一括計算＆登録処理 ---
-    function calculateAllLogs(baseBox, realSizeCm) {
-        // 【AIの魔法】1ピクセルが何センチかを計算する
-        const pxPerCm = baseBox.w / realSizeCm;
+    // --- 直径入力モーダルの制御 ---
+    function openDiaModal(box) {
+        selectedBoxForCalc = box;
+        document.getElementById('diameterModal').style.display = 'block';
+    }
+
+    function closeDiaModal() {
+        document.getElementById('diameterModal').style.display = 'none';
+        selectedBoxForCalc = null;
+        // キャンセルされたら枠を紫色に戻す
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        currentBoxes.forEach(b => drawBox(b, '#9932CC'));
+    }
+
+    function confirmDiameter() {
+        const selectVal = document.getElementById('diaSelect').value;
+        let realSizeCm = 0;
         
+        if(selectVal === 'manual') {
+            realSizeCm = parseFloat(document.getElementById('manualDiaInput').value);
+        } else {
+            realSizeCm = parseFloat(selectVal);
+        }
+
+        if(!realSizeCm || realSizeCm <= 0) {
+            alert("正しい数値を入力してください");
+            return;
+        }
+
+        document.getElementById('diameterModal').style.display = 'none';
+        calculateAllLogs(selectedBoxForCalc, realSizeCm);
+    }
+
+    // --- 一括計算＆スクショ用描画処理 ---
+    function calculateAllLogs(baseBox, realSizeCm) {
+        const pxPerCm = baseBox.w / realSizeCm;
         const treeType = document.getElementById('m_treeType').value || "スギ";
         const length = parseFloat(document.getElementById('m_length').value) || 4;
 
         let addedCount = 0;
         const list = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
 
-        // 検知されたすべての丸太をループして計算
-        currentBoxes.forEach(box => {
-            // 直径の推定（ピクセル幅 ÷ 1cmあたりのピクセル数）
-            let estDia = Math.round(box.w / pxPerCm);
-            if(estDia < 1) estDia = 1; // 1cm未満のエラー防止
+        // 枠を消して、ドットと数値を描画する準備
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // 材積の計算（既存ロジックと同じ）
+        currentBoxes.forEach(box => {
+            let estDia = Math.round(box.w / pxPerCm);
+            if(estDia < 1) estDia = 1; 
+
+            // 材積計算
             let vol = 0;
             if (length < 6) {
                 vol = (estDia * estDia * length) / 10000;
@@ -361,9 +417,8 @@
             }
             vol = Math.round(vol * 1000) / 1000;
 
-            // データに追加
             list.unshift({ 
-                id: Date.now() + Math.random(), // 瞬時に複数入るので乱数を足す
+                id: Date.now() + Math.random(), 
                 tree: treeType, 
                 length: length, 
                 diameter: estDia, 
@@ -371,16 +426,39 @@
                 memo: 'AI推定' 
             });
             addedCount++;
+
+            // 【スクショ用：緑色の点と直径数値を描画】
+            const cx = box.x + box.w / 2;
+            const cy = box.y + box.h / 2;
+
+            // ネオングリーンの点を打つ
+            ctx.beginPath();
+            ctx.arc(cx, cy, 6, 0, 2 * Math.PI);
+            ctx.fillStyle = '#39ff14'; 
+            ctx.fill();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#000000';
+            ctx.stroke();
+
+            // 推定直径を描画（黒枠付きの白文字で見やすく）
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 18px Arial';
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 3;
+            // 視認性を上げるため、点の少し右上に数値を配置
+            ctx.strokeText(`${estDia}`, cx + 8, cy + 6);
+            ctx.fillText(`${estDia}`, cx + 8, cy + 6);
         });
 
-        // データを保存して表を更新
         localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
         renderTable();
 
-        alert(`${addedCount}本の丸太をデータに一括登録しました！`);
+        // 状態を「計算完了」にし、シャッターは解除せずそのまま維持
+        isCalculated = true;
         
-        // シャッターを解除して次の撮影へ
-        toggleShutter();
+        const calibMsg = document.getElementById('calibMsg');
+        calibMsg.innerHTML = `✅ ${addedCount}本の丸太を登録しました！<br>このままスクショを撮影できます。次へ進むには上の「🔄やり直し」を押してください。`;
+        calibMsg.style.color = "#388e3c"; // 完了の緑色メッセージに変更
     }
 
     // --- 以下、テーブル・設定関連の既存ロジック ---
