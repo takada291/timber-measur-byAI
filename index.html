@@ -29,7 +29,6 @@
         video { width: 100%; height: auto; display: block; }
         canvas { 
             position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; 
-            /* 長押しメニュー等を出さないおまじない */
             -webkit-touch-callout: none; user-select: none; touch-action: none;
         }
         
@@ -61,7 +60,7 @@
 
 <div class="card">
     <div class="header-area">
-        <h2>AI検尺アプリ Ver 1.3</h2>
+        <h2>AI検尺アプリ Ver 1.4</h2>
         <button class="settings-btn" onclick="openSettings()">⚙️ 設定</button>
     </div>
 
@@ -74,7 +73,7 @@
         <div id="camera-container">
             <video id="webcam" autoplay playsinline muted></video>
             <canvas id="overlay"></canvas>
-            <div id="camStatus" style="position: absolute; color: white; z-index: 20;">カメラ起動待ち...</div>
+            <div id="camStatus" style="position: absolute; color: white; background: rgba(0,0,0,0.5); padding: 5px 10px; border-radius: 20px; z-index: 20;">カメラ起動待ち...</div>
         </div>
         
         <div id="calibration-area">
@@ -154,10 +153,10 @@
     let cameraStream;
     let currentBoxes = []; 
     
-    // バースト検知（20回スキャン）用の設定
+    // バースト検知用の設定
     let isAccumulating = false;
     let accumulateCount = 0;
-    const MAX_ACCUMULATE = 20; // 20回に変更
+    const MAX_ACCUMULATE = 20; 
     let accumulatedBoxes = [];
 
     let selectedBoxForCalc = null;
@@ -192,7 +191,9 @@
 
     async function initCamera() {
         try {
-            if(cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); }
+            if(cameraStream) { 
+                cameraStream.getTracks().forEach(t => t.stop()); 
+            }
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
                 audio: false
@@ -205,13 +206,14 @@
             video.setAttribute('playsinline', '');
             
             video.onloadedmetadata = () => {
-                video.play();
+                video.play().catch(e => console.error("Auto-play prevented", e));
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
                 camStatus.style.display = "none";
             };
         } catch (err) {
             camStatus.innerText = "カメラ起動失敗: " + err.message;
+            camStatus.style.display = "block";
         }
     }
 
@@ -257,7 +259,7 @@
         }
     }
 
-    // ★ 次の撮影に向けて全てをリセットする関数（iPhone対策入り）
+    // ★ 完全版：次の撮影に向けて全てをリセットする関数
     function resetShutter() {
         const shutterBtn = document.getElementById('shutterBtn');
         const calibArea = document.getElementById('calibration-area');
@@ -266,22 +268,19 @@
         isCalculated = false;
         isAccumulating = false;
         currentBoxes = [];
-        ctx.clearRect(0, 0, canvas.width, canvas.height); // 画面を綺麗にお掃除
+        ctx.clearRect(0, 0, canvas.width, canvas.height); 
         
-        // ★ iPhoneのブラックアウト対策：Playしてみてダメならカメラ再起動
-        let playPromise = video.play();
-        if (playPromise !== undefined) {
-            playPromise.catch(error => {
-                console.log("iOS: 映像再開エラーのためカメラを再起動します", error);
-                initCamera(); // ブラックアウトした場合はカメラごと再起動して復旧させる
-            });
-        }
+        // ★ iPhoneブラックアウト対策の決定版：カメラを物理的に再起動する
+        camStatus.innerText = "カメラ再起動中...";
+        camStatus.style.display = "block";
+        initCamera(); 
         
         shutterBtn.innerText = "📸 撮影＆検知";
         shutterBtn.style.background = "#e65100";
         calibArea.style.display = "none";
         
-        detectFrame(); // リアルタイム検知を再開
+        // 念のため検知ループも再発火させておく
+        setTimeout(detectFrame, 500);
     }
 
     function toggleShutter() {
@@ -292,7 +291,6 @@
         const calibMsg = document.getElementById('calibMsg');
 
         if (isFrozen || isAccumulating) {
-            // フリーズ中ならリセットして次へ
             resetShutter();
         } else {
             // ★撮影ボタンを押した瞬間の処理（動画は止めず、20回スキャン開始）
@@ -319,7 +317,6 @@
         ctx.fillText(box.text, box.x + 2, box.y - 5);
     }
 
-    // ダブった枠を統合する処理
     function mergeBoxes(boxes) {
         const merged = [];
         const threshold = 30; 
@@ -343,7 +340,6 @@
     }
 
     async function detectFrame() {
-        // AI停止中、または（フリーズ中でかつスキャン中でもない）場合は回さない
         if(!isAILunning || (isFrozen && !isAccumulating)) return; 
 
         if(video.readyState === 4 && logModel) {
@@ -404,13 +400,12 @@
                 }
             }
         }
-        // 蓄積中は高速で回し、それ以外は少し間引く
         setTimeout(detectFrame, isAccumulating ? 80 : 250); 
     }
 
     // --- 基準丸太のタップ検知 ---
     canvas.addEventListener('click', (e) => {
-        // ★ 手動追加を廃止したため、計算完了後（isCalculated = true）は何もしない
+        // ★ 手動追加を完全に廃止したため、計算完了後（isCalculated = true）は何もしない
         if (!isFrozen || currentBoxes.length === 0 || isCalculated) return;
 
         const rect = canvas.getBoundingClientRect();
@@ -519,7 +514,6 @@
         ctx.lineWidth = 3; ctx.strokeText(`${text}`, x + 8, y + 6); ctx.fillText(`${text}`, x + 8, y + 6);
     }
 
-    // --- ★ 全自動スクショ保存＆GPS書き込み機能 ---
     function autoSaveScreenshotWithGPS() {
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
@@ -567,7 +561,6 @@
         link.click();
     }
 
-    // --- 以下、テーブル設定等 ---
     function renderTable() {
         const list = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
         const tbody = document.querySelector('#dataTable tbody');
