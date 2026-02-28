@@ -27,7 +27,12 @@
         /* --- カメラモード用 --- */
         #camera-container { position: relative; width: 100%; border-radius: 8px; overflow: hidden; background: #000; display: flex; justify-content: center; align-items: center; min-height: 250px; }
         video { width: 100%; height: auto; display: block; }
-        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; }
+        
+        /* スマホでの長押し時に変なメニューが出ないようにする魔法 */
+        canvas { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; 
+            -webkit-touch-callout: none; user-select: none; touch-action: none;
+        }
         
         .camera-controls { display: flex; justify-content: space-between; margin-bottom: 10px; gap: 10px; }
         .btn-ai-start { flex: 1; background: #1565c0; color: white; padding: 12px; border: none; border-radius: 6px; font-weight: bold; font-size: 1rem; }
@@ -57,7 +62,7 @@
 
 <div class="card">
     <div class="header-area">
-        <h2>AI検知 0.8</h2>
+        <h2>AI検知 0.9</h2>
         <button class="settings-btn" onclick="openSettings()">⚙️ 設定</button>
     </div>
 
@@ -116,8 +121,8 @@
 
 <div id="diameterModal" class="modal">
     <div class="modal-content">
-        <h3 style="margin-top:0; color:#e65100;">基準サイズ入力</h3>
-        <p style="font-size:0.9em; margin-bottom:15px;">タップした丸太の末口直径(cm)を選択してください。</p>
+        <h3 id="diaModalTitle" style="margin-top:0; color:#e65100;">基準サイズ入力</h3>
+        <p id="diaModalDesc" style="font-size:0.9em; margin-bottom:15px;">タップした丸太の末口直径(cm)を選択してください。</p>
         
         <select id="diaSelect" style="margin-bottom:10px; font-size:1.2rem; padding:10px; width:100%;"></select>
         
@@ -148,10 +153,15 @@
     let logModel;
     let isAILunning = false;
     let isFrozen = false; 
-    let isCalculated = false; // 一括計算が完了したかどうかのフラグ
+    let isCalculated = false; 
     let cameraStream;
     let currentBoxes = []; 
+    
+    // モーダル制御用の変数
+    let currentModalMode = 'base'; // 'base': 基準入力, 'manual_add': 手動追加
     let selectedBoxForCalc = null;
+    let addTargetX = 0;
+    let addTargetY = 0;
 
     window.onload = function() {
         if ('serviceWorker' in navigator) {
@@ -168,15 +178,12 @@
         initDiameterDropdown();
     };
 
-    // プルダウンリストの生成
     function initDiameterDropdown() {
         const diaSelect = document.getElementById('diaSelect');
         for(let i=10; i<=60; i+=2) {
             diaSelect.appendChild(new Option(`${i} cm`, i));
         }
         diaSelect.appendChild(new Option('その他 (手入力)', 'manual'));
-        
-        // 14cmあたりを初期選択にしておく
         diaSelect.value = "14";
 
         diaSelect.addEventListener('change', (e) => {
@@ -187,7 +194,6 @@
     async function initCamera() {
         try {
             if(cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); }
-            // AQUOS横向き対応のため、max制限を外し、idealのみで広めに要求する
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
                 audio: false
@@ -260,9 +266,8 @@
         const calibMsg = document.getElementById('calibMsg');
 
         if (isFrozen) {
-            // フリーズ解除・再開
             isFrozen = false;
-            isCalculated = false; // 計算フラグもリセット
+            isCalculated = false; 
             video.play(); 
             shutterBtn.innerText = "📸 シャッター";
             shutterBtn.style.background = "#e65100";
@@ -271,7 +276,6 @@
             calibMsg.style.color = "#e65100";
             detectFrame(); 
         } else {
-            // フリーズ（時を止める）
             isFrozen = true;
             video.pause(); 
             shutterBtn.innerText = "🔄 やり直し";
@@ -280,7 +284,6 @@
         }
     }
 
-    // --- 枠を描画する共通関数 ---
     function drawBox(box, color) {
         ctx.strokeStyle = color; 
         ctx.lineWidth = 3;
@@ -329,9 +332,9 @@
         setTimeout(detectFrame, 300);
     }
 
-    // --- 【キャンバスタップ時の処理】 ---
+    // --- 【基準入力のタップ検知】 ---
     canvas.addEventListener('click', (e) => {
-        // 時が止まっていない、枠がない、または既に計算済みの場合は反応しない
+        // 計算済みの場合は、後述の「長押し」で処理するためクリックは無視する
         if (!isFrozen || currentBoxes.length === 0 || isCalculated) return;
 
         const rect = canvas.getBoundingClientRect();
@@ -351,24 +354,84 @@
         if (clickedBox) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             currentBoxes.forEach(b => drawBox(b, '#9932CC'));
-            drawBox(clickedBox, '#e65100'); // タップした枠をオレンジに
+            drawBox(clickedBox, '#e65100'); 
 
-            setTimeout(() => openDiaModal(clickedBox), 50);
+            setTimeout(() => openDiaModal(clickedBox, 'base'), 50);
         }
     });
 
-    // --- 直径入力モーダルの制御 ---
-    function openDiaModal(box) {
-        selectedBoxForCalc = box;
+    // --- 【超重要：手動追加の長押し検知】 ---
+    let pressTimer;
+    const longPressDuration = 500; // 0.5秒押し続けると発動
+
+    // コンテキストメニュー（画像保存ダイアログ等）を出さない魔法
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+    function startPress(e) {
+        // AIの一括計算が終わっていない時は作動させない
+        if (!isCalculated) return;
+        
+        let clientX, clientY;
+        if (e.type.includes('touch')) {
+            clientX = e.touches[0].clientX;
+            clientY = e.touches[0].clientY;
+        } else {
+            clientX = e.clientX;
+            clientY = e.clientY;
+        }
+        
+        const rect = canvas.getBoundingClientRect();
+        const clickX = clientX - rect.left;
+        const clickY = clientY - rect.top;
+
+        pressTimer = setTimeout(() => {
+            // 長押し成功時：モードを「手動追加」にしてモーダルを開く
+            openDiaModal(null, 'manual_add', clickX, clickY);
+        }, longPressDuration);
+    }
+
+    function cancelPress() {
+        clearTimeout(pressTimer);
+    }
+
+    canvas.addEventListener('mousedown', startPress);
+    canvas.addEventListener('touchstart', startPress, {passive: false});
+    canvas.addEventListener('mouseup', cancelPress);
+    canvas.addEventListener('mouseleave', cancelPress);
+    canvas.addEventListener('touchend', cancelPress);
+
+
+    // --- モーダル制御の共通化 ---
+    function openDiaModal(box, mode, x = 0, y = 0) {
+        currentModalMode = mode;
+        const modalTitle = document.getElementById('diaModalTitle');
+        const modalDesc = document.getElementById('diaModalDesc');
+
+        if (mode === 'base') {
+            selectedBoxForCalc = box;
+            modalTitle.innerText = "基準サイズ入力";
+            modalDesc.innerText = "タップした丸太の末口直径(cm)を選択してください。";
+            modalTitle.style.color = "#e65100"; // オレンジ
+        } else if (mode === 'manual_add') {
+            addTargetX = x;
+            addTargetY = y;
+            modalTitle.innerText = "手動で丸太を追加";
+            modalDesc.innerText = "タップした場所の丸太の直径(cm)を選択してください。";
+            modalTitle.style.color = "#1565c0"; // 青
+        }
+
         document.getElementById('diameterModal').style.display = 'block';
     }
 
     function closeDiaModal() {
         document.getElementById('diameterModal').style.display = 'none';
-        selectedBoxForCalc = null;
-        // キャンセルされたら枠を紫色に戻す
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        currentBoxes.forEach(b => drawBox(b, '#9932CC'));
+        
+        // 基準入力モードでキャンセルされた時だけ、枠を紫色に戻す
+        if (currentModalMode === 'base') {
+            selectedBoxForCalc = null;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            currentBoxes.forEach(b => drawBox(b, '#9932CC'));
+        }
     }
 
     function confirmDiameter() {
@@ -387,7 +450,13 @@
         }
 
         document.getElementById('diameterModal').style.display = 'none';
-        calculateAllLogs(selectedBoxForCalc, realSizeCm);
+
+        // モードによって処理を分岐
+        if (currentModalMode === 'base') {
+            calculateAllLogs(selectedBoxForCalc, realSizeCm);
+        } else if (currentModalMode === 'manual_add') {
+            addManualLog(addTargetX, addTargetY, realSizeCm);
+        }
     }
 
     // --- 一括計算＆スクショ用描画処理 ---
@@ -399,23 +468,13 @@
         let addedCount = 0;
         const list = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
 
-        // 枠を消して、ドットと数値を描画する準備
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         currentBoxes.forEach(box => {
             let estDia = Math.round(box.w / pxPerCm);
             if(estDia < 1) estDia = 1; 
 
-            // 材積計算
-            let vol = 0;
-            if (length < 6) {
-                vol = (estDia * estDia * length) / 10000;
-            } else {
-                const L_prime = Math.floor(length);
-                const factor = estDia + (L_prime - 4) / 2;
-                vol = (factor * factor * length) / 10000;
-            }
-            vol = Math.round(vol * 1000) / 1000;
+            let vol = calculateVolume(estDia, length);
 
             list.unshift({ 
                 id: Date.now() + Math.random(), 
@@ -427,38 +486,77 @@
             });
             addedCount++;
 
-            // 【スクショ用：緑色の点と直径数値を描画】
             const cx = box.x + box.w / 2;
             const cy = box.y + box.h / 2;
-
-            // ネオングリーンの点を打つ
-            ctx.beginPath();
-            ctx.arc(cx, cy, 6, 0, 2 * Math.PI);
-            ctx.fillStyle = '#39ff14'; 
-            ctx.fill();
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = '#000000';
-            ctx.stroke();
-
-            // 推定直径を描画（黒枠付きの白文字で見やすく）
-            ctx.fillStyle = '#FFFFFF';
-            ctx.font = 'bold 18px Arial';
-            ctx.strokeStyle = '#000000';
-            ctx.lineWidth = 3;
-            // 視認性を上げるため、点の少し右上に数値を配置
-            ctx.strokeText(`${estDia}`, cx + 8, cy + 6);
-            ctx.fillText(`${estDia}`, cx + 8, cy + 6);
+            drawDotAndText(cx, cy, estDia, '#39ff14'); // 緑色の点
         });
 
         localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
         renderTable();
 
-        // 状態を「計算完了」にし、シャッターは解除せずそのまま維持
         isCalculated = true;
         
         const calibMsg = document.getElementById('calibMsg');
-        calibMsg.innerHTML = `✅ ${addedCount}本の丸太を登録しました！<br>このままスクショを撮影できます。次へ進むには上の「🔄やり直し」を押してください。`;
-        calibMsg.style.color = "#388e3c"; // 完了の緑色メッセージに変更
+        calibMsg.innerHTML = `✅ ${addedCount}本の丸太を登録しました！<br><b>見逃しがあれば、そこを長押しで手動追加できます。</b>`;
+        calibMsg.style.color = "#388e3c"; 
+    }
+
+    // --- 手動で1本追加する処理 ---
+    function addManualLog(cx, cy, diaCm) {
+        const treeType = document.getElementById('m_treeType').value || "スギ";
+        const length = parseFloat(document.getElementById('m_length').value) || 4;
+        
+        let vol = calculateVolume(diaCm, length);
+
+        const list = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        list.unshift({ 
+            id: Date.now() + Math.random(), 
+            tree: treeType, 
+            length: length, 
+            diameter: diaCm, 
+            volume: vol, 
+            memo: '手動追加' 
+        });
+
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+        renderTable();
+
+        // 画面に「水色の点」を描き足す
+        drawDotAndText(cx, cy, diaCm, '#00FFFF'); // 水色の点
+        
+        const calibMsg = document.getElementById('calibMsg');
+        calibMsg.innerHTML = `✅ 手動で1本（${diaCm}cm）を追加しました！<br>さらに長押しで追加、または上の「🔄やり直し」で次へ。`;
+    }
+
+    // 材積計算の共通関数
+    function calculateVolume(dia, len) {
+        let vol = 0;
+        if (len < 6) {
+            vol = (dia * dia * len) / 10000;
+        } else {
+            const L_prime = Math.floor(len);
+            const factor = dia + (L_prime - 4) / 2;
+            vol = (factor * factor * len) / 10000;
+        }
+        return Math.round(vol * 1000) / 1000;
+    }
+
+    // 点と数値を描画する共通関数
+    function drawDotAndText(x, y, text, dotColor) {
+        ctx.beginPath();
+        ctx.arc(x, y, 6, 0, 2 * Math.PI);
+        ctx.fillStyle = dotColor; 
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#000000';
+        ctx.stroke();
+
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 18px Arial';
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 3;
+        ctx.strokeText(`${text}`, x + 8, y + 6);
+        ctx.fillText(`${text}`, x + 8, y + 6);
     }
 
     // --- 以下、テーブル・設定関連の既存ロジック ---
@@ -469,6 +567,7 @@
         let totalC = 0, totalV = 0;
         list.forEach(item => {
             totalC++; totalV += item.volume;
+            // 備考に「手動追加」があれば少し色を変えるなどの工夫も可能
             tbody.innerHTML += `<tr><td>${item.tree}</td><td>${item.length}</td><td>${item.diameter}</td><td>${item.volume.toFixed(3)}</td><td><button class="btn-del" onclick="deleteItem(${item.id})">×</button></td></tr>`;
         });
         document.getElementById('totalCount').innerText = totalC;
