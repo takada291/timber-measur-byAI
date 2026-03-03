@@ -52,7 +52,7 @@
         .export-btn { width: 100%; background: #388e3c; color: white; padding: 12px; border: none; border-radius: 6px; margin-top: 10px; font-size: 1rem; font-weight: bold; }
 
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 99; }
-        .modal-content { background: white; margin: 10% auto; padding: 20px; width: 85%; max-width: 400px; border-radius: 12px; }
+        .modal-content { background: white; margin: 5% auto; padding: 20px; width: 90%; max-width: 400px; border-radius: 12px; text-align: center; }
         .close-btn { background: #666; color: white; width: 100%; padding: 10px; border: none; border-radius: 6px; margin-top: 15px; }
     </style>
 </head>
@@ -60,7 +60,7 @@
 
 <div class="card">
     <div class="header-area">
-        <h2>AI検尺アプリ Ver 1.8</h2>
+        <h2>AI検尺アプリ Ver 1.9</h2>
         <button class="settings-btn" onclick="openSettings()">⚙️ 設定</button>
     </div>
 
@@ -121,16 +121,25 @@
     <div class="modal-content">
         <h3 id="diaModalTitle" style="margin-top:0; color:#e65100;">基準サイズ入力</h3>
         <p id="diaModalDesc" style="font-size:0.9em; margin-bottom:15px;">タップした丸太の末口直径(cm)を選択してください。</p>
-        
         <select id="diaSelect" style="margin-bottom:10px; font-size:1.2rem; padding:10px; width:100%;"></select>
-        
         <div id="manualDiaDiv" style="display:none; margin-bottom:10px;">
             <input type="number" id="manualDiaInput" placeholder="手入力 (cm)" style="font-size:1.2rem; padding:10px; width:100%;">
         </div>
-        
         <div style="display:flex; gap:10px; margin-top:15px;">
             <button class="btn-del" style="flex:1; padding:12px; font-size:1rem;" onclick="closeDiaModal()">キャンセル</button>
             <button class="btn-ai-start" style="flex:1; padding:12px; font-size:1rem; background:#388e3c;" onclick="confirmDiameter()">決定</button>
+        </div>
+    </div>
+</div>
+
+<div id="savePreviewModal" class="modal">
+    <div class="modal-content">
+        <h3 style="margin-top:0; color:#1565c0;">📸 保存プレビュー</h3>
+        <p style="font-size:0.8em; color:#666;">撮影日時・GPS情報付き</p>
+        <img id="previewImg" style="width:100%; border-radius:8px; border:2px solid #ccc; margin-bottom:10px;">
+        <div style="display:flex; gap:10px; margin-top:10px;">
+            <button class="btn-del" style="flex:1; padding:10px; background:#666;" onclick="closeSaveModal()">閉じる</button>
+            <button class="btn-ai-start" style="flex:1; padding:10px; background:#e65100;" onclick="downloadImage()">💾 画像保存</button>
         </div>
     </div>
 </div>
@@ -153,13 +162,14 @@
     let cameraStream;
     let currentBoxes = []; 
     
-    // バースト検知用の設定 (10回)
+    // バースト検知用の設定 (★20回に変更)
     let isAccumulating = false;
     let accumulateCount = 0;
-    const MAX_ACCUMULATE = 10; 
+    const MAX_ACCUMULATE = 20; 
     let accumulatedBoxes = [];
 
     let selectedBoxForCalc = null;
+    let previewDataUrl = null; // 保存用画像のデータ
 
     window.onload = function() {
         if ('serviceWorker' in navigator) {
@@ -191,20 +201,16 @@
 
     async function initCamera() {
         try {
-            if(cameraStream) { 
-                cameraStream.getTracks().forEach(t => t.stop()); 
-            }
+            if(cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); }
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
                 audio: false
             });
             video.srcObject = stream;
             cameraStream = stream;
-            
             video.setAttribute('autoplay', '');
             video.setAttribute('muted', '');
             video.setAttribute('playsinline', '');
-            
             video.onloadedmetadata = () => {
                 video.play().catch(e => console.error("Auto-play prevented", e));
                 canvas.width = video.videoWidth;
@@ -224,7 +230,6 @@
         if(isAILunning) {
             isAILunning = false;
             if(isFrozen || isAccumulating) resetShutter(); 
-            
             btn.innerText = "🚀 検知スタート";
             btn.style.background = "#1565c0";
             shutterBtn.style.display = "none";
@@ -234,7 +239,6 @@
             isAILunning = true;
             btn.innerText = "⏳ 読込中...";
             btn.style.background = "#d32f2f";
-            
             if(!logModel) {
                 try {
                     const rf = await window.roboflow.auth({
@@ -252,40 +256,31 @@
                     return;
                 }
             }
-            
             btn.innerText = "■ AI停止";
             shutterBtn.style.display = "block";
             detectFrame();
         }
     }
 
-    // ★ 完全版：次の撮影に向けて全てをリセットする関数
     function resetShutter() {
         const shutterBtn = document.getElementById('shutterBtn');
         const calibArea = document.getElementById('calibration-area');
-        
         isFrozen = false;
         isCalculated = false;
         isAccumulating = false;
         currentBoxes = [];
         ctx.clearRect(0, 0, canvas.width, canvas.height); 
-        
-        // ★ iPhoneブラックアウト対策：カメラを物理的に再起動する
         camStatus.innerText = "カメラ再起動中...";
         camStatus.style.display = "block";
         initCamera(); 
-        
         shutterBtn.innerText = "📸 撮影＆検知";
         shutterBtn.style.background = "#e65100";
         calibArea.style.display = "none";
-        
-        // 念のため検知ループも再発火させておく
         setTimeout(detectFrame, 500);
     }
 
     function toggleShutter() {
         if (!isAILunning) return;
-        
         const shutterBtn = document.getElementById('shutterBtn');
         const calibArea = document.getElementById('calibration-area');
         const calibMsg = document.getElementById('calibMsg');
@@ -293,11 +288,9 @@
         if (isFrozen || isAccumulating) {
             resetShutter();
         } else {
-            // ★撮影ボタンを押した瞬間の処理（動画は止めず、10回スキャン開始）
             isAccumulating = true;
             accumulateCount = 0;
             accumulatedBoxes = [];
-            
             shutterBtn.innerText = "⏳ スキャン中...";
             shutterBtn.style.background = "#d32f2f";
             calibArea.style.display = "block";
@@ -320,7 +313,6 @@
     function mergeBoxes(boxes) {
         const merged = [];
         const threshold = 30; 
-        
         boxes.forEach(b => {
             const cx = b.x + b.w / 2;
             const cy = b.y + b.h / 2;
@@ -341,10 +333,8 @@
 
     async function detectFrame() {
         if(!isAILunning || (isFrozen && !isAccumulating)) return; 
-
         if(video.readyState === 4 && logModel) {
             const predictions = await logModel.detect(video);
-            
             const rect = video.getBoundingClientRect();
             canvas.width = rect.width;
             canvas.height = rect.height;
@@ -352,7 +342,6 @@
             const scaleY = rect.height / video.videoHeight;
 
             if (!isAccumulating) {
-                // 通常のリアルタイム検知（ピコピコ動く）
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 currentBoxes = []; 
                 predictions.forEach(p => {
@@ -367,7 +356,6 @@
                     drawBox(boxInfo, '#9932CC'); 
                 });
             } else {
-                // ★バーストスキャン中
                 predictions.forEach(p => {
                     const w = p.bbox.width * scaleX;
                     const h = p.bbox.height * scaleY;
@@ -377,20 +365,14 @@
                     const textWidth = ctx.measureText(text).width;
                     accumulatedBoxes.push({ x, y, w, h, text, textWidth });
                 });
-                
                 accumulateCount++;
-                
                 if (accumulateCount >= MAX_ACCUMULATE) {
-                    // スキャン完了！
                     isAccumulating = false;
                     isFrozen = true;
                     video.pause();
-                    
                     currentBoxes = mergeBoxes(accumulatedBoxes);
-                    
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
                     currentBoxes.forEach(b => drawBox(b, '#9932CC'));
-                    
                     const shutterBtn = document.getElementById('shutterBtn');
                     const calibMsg = document.getElementById('calibMsg');
                     shutterBtn.innerText = "🔄 やり直し";
@@ -403,24 +385,19 @@
         setTimeout(detectFrame, isAccumulating ? 80 : 250); 
     }
 
-    // --- 基準丸太のタップ検知 ---
     canvas.addEventListener('click', (e) => {
         if (!isFrozen || currentBoxes.length === 0 || isCalculated) return;
-
         const rect = canvas.getBoundingClientRect();
         const clickX = e.clientX - rect.left;
         const clickY = e.clientY - rect.top;
-
         let clickedBox = null;
         for (let i = currentBoxes.length - 1; i >= 0; i--) {
             let box = currentBoxes[i];
-            if (clickX >= box.x && clickX <= box.x + box.w &&
-                clickY >= box.y && clickY <= box.y + box.h) {
+            if (clickX >= box.x && clickX <= box.x + box.w && clickY >= box.y && clickY <= box.y + box.h) {
                 clickedBox = box;
                 break;
             }
         }
-
         if (clickedBox) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             currentBoxes.forEach(b => drawBox(b, '#9932CC'));
@@ -429,25 +406,21 @@
         }
     });
 
-    // --- モーダル制御 ---
     function openDiaModal(box) {
         selectedBoxForCalc = box;
         document.getElementById('diaModalTitle').innerText = "基準サイズ入力";
         document.getElementById('diaModalTitle').style.color = "#e65100"; 
         document.getElementById('diameterModal').style.display = 'block';
     }
-
     function closeDiaModal() {
         document.getElementById('diameterModal').style.display = 'none';
         selectedBoxForCalc = null;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         currentBoxes.forEach(b => drawBox(b, '#9932CC'));
     }
-
     function confirmDiameter() {
         const selectVal = document.getElementById('diaSelect').value;
         let realSizeCm = parseFloat(selectVal === 'manual' ? document.getElementById('manualDiaInput').value : selectVal);
-
         if(!realSizeCm || realSizeCm <= 0) {
             alert("正しい数値を入力してください");
             return;
@@ -460,7 +433,6 @@
         const pxPerCm = baseBox.w / realSizeCm;
         const treeType = document.getElementById('m_treeType').value || "スギ";
         const length = parseFloat(document.getElementById('m_length').value) || 4;
-
         let addedCount = 0;
         const list = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -468,17 +440,8 @@
         currentBoxes.forEach(box => {
             let estDia = Math.max(1, Math.round(box.w / pxPerCm));
             let vol = calculateVolume(estDia, length);
-
-            list.unshift({ 
-                id: Date.now() + Math.random(), 
-                tree: treeType, 
-                length: length, 
-                diameter: estDia, 
-                volume: vol, 
-                memo: 'AI推定' 
-            });
+            list.unshift({ id: Date.now() + Math.random(), tree: treeType, length: length, diameter: estDia, volume: vol, memo: 'AI推定' });
             addedCount++;
-
             const cx = box.x + box.w / 2;
             const cy = box.y + box.h / 2;
             drawDotAndText(cx, cy, estDia, '#39ff14'); 
@@ -489,14 +452,15 @@
         isCalculated = true; 
         
         const calibMsg = document.getElementById('calibMsg');
-        calibMsg.innerHTML = `✅ ${addedCount}本を保存しました！<br><b>上の「🔄次の撮影へ」を押すとリセットされます。</b>`;
+        calibMsg.innerHTML = `✅ ${addedCount}本を保存しました！<br><b>プレビュー確認後、保存してください。</b>`;
         calibMsg.style.color = "#388e3c"; 
 
         const shutterBtn = document.getElementById('shutterBtn');
         shutterBtn.innerText = "🔄 次の撮影へ（リセット）";
         shutterBtn.style.background = "#1565c0"; 
 
-        autoSaveScreenshotWithGPS();
+        // ★計算完了後、すぐにプレビューモーダルを準備して表示
+        showSavePreview();
     }
 
     function calculateVolume(dia, len) {
@@ -513,27 +477,27 @@
         ctx.lineWidth = 3; ctx.strokeText(`${text}`, x + 8, y + 6); ctx.fillText(`${text}`, x + 8, y + 6);
     }
 
-    // --- ★ AQUOS/Android 対応版：自動スクショ保存＆GPS書き込み ---
-    function autoSaveScreenshotWithGPS() {
+    // --- ★ AQUOS対策：ポップアップで確認してから保存する方式 ---
+    function showSavePreview() {
+        document.getElementById('calibMsg').innerHTML = "⏳ 画像生成中...";
+        
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
                 (position) => {
-                    const lat = position.coords.latitude.toFixed(5);
-                    const lon = position.coords.longitude.toFixed(5);
-                    createAndDownloadImage(lat, lon);
+                    generateImage(position.coords.latitude.toFixed(5), position.coords.longitude.toFixed(5));
                 },
                 (error) => {
-                    console.log("GPS取得エラー", error);
-                    createAndDownloadImage(null, null); 
+                    console.log("GPSエラー", error);
+                    generateImage(null, null);
                 },
                 { timeout: 5000 }
             );
         } else {
-            createAndDownloadImage(null, null);
+            generateImage(null, null);
         }
     }
 
-    function createAndDownloadImage(lat, lon) {
+    function generateImage(lat, lon) {
         const offCanvas = document.createElement('canvas');
         offCanvas.width = canvas.width;
         offCanvas.height = canvas.height;
@@ -545,7 +509,6 @@
         const timeStr = new Date().toLocaleString('ja-JP');
         offCtx.fillStyle = "rgba(0,0,0,0.6)";
         offCtx.fillRect(10, offCanvas.height - 75, 320, 65);
-        
         offCtx.fillStyle = "#FFFFFF";
         offCtx.font = "16px Arial";
         offCtx.fillText(`撮影日時: ${timeStr}`, 20, offCanvas.height - 50);
@@ -555,14 +518,31 @@
             offCtx.fillText(`位置情報: 取得できませんでした`, 20, offCanvas.height - 25);
         }
 
-        // ★ AQUOS対策：リンクをbodyに追加してからクリックする（Androidのお作法）
+        previewDataUrl = offCanvas.toDataURL('image/jpeg', 0.9);
+        
+        // モーダルに画像を表示
+        document.getElementById('previewImg').src = previewDataUrl;
+        document.getElementById('savePreviewModal').style.display = 'block';
+        document.getElementById('calibMsg').innerHTML = "✅ 保存準備完了";
+    }
+
+    function closeSaveModal() {
+        document.getElementById('savePreviewModal').style.display = 'none';
+    }
+
+    function downloadImage() {
+        if (!previewDataUrl) return;
         const link = document.createElement('a');
         link.download = `丸太検尺_${Date.now()}.jpg`;
-        link.href = offCanvas.toDataURL('image/jpeg', 0.9);
+        link.href = previewDataUrl;
         
-        document.body.appendChild(link); // 一旦DOMに追加
+        // ★ AQUOS対策：DOMに追加してクリック
+        document.body.appendChild(link);
         link.click();
-        document.body.removeChild(link); // クリック後に削除
+        document.body.removeChild(link);
+        
+        alert("画像を保存しました！");
+        closeSaveModal();
     }
 
     // --- 以下、テーブル設定等 ---
