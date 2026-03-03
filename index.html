@@ -60,7 +60,7 @@
 
 <div class="card">
     <div class="header-area">
-        <h2>AI検尺アプリ Ver 1.5</h2>
+        <h2>AI検尺アプリ Ver 1.6</h2>
         <button class="settings-btn" onclick="openSettings()">⚙️ 設定</button>
     </div>
 
@@ -242,7 +242,7 @@
                     });
                     logModel = await rf.load({
                         model: "my-first-project-bjosg",
-                        version: 8 
+                        version: 9 
                     });
                 } catch (e) {
                     alert("モデル読込失敗: " + (e.message || e));
@@ -628,6 +628,7 @@
 </script>
 </body>
 </html>
+
 
 
 
