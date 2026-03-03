@@ -60,7 +60,7 @@
 
 <div class="card">
     <div class="header-area">
-        <h2>AI検尺アプリ Ver 1.7</h2>
+        <h2>AI検尺アプリ Ver 1.8</h2>
         <button class="settings-btn" onclick="openSettings()">⚙️ 設定</button>
     </div>
 
@@ -153,7 +153,7 @@
     let cameraStream;
     let currentBoxes = []; 
     
-    // バースト検知用の設定
+    // バースト検知用の設定 (10回)
     let isAccumulating = false;
     let accumulateCount = 0;
     const MAX_ACCUMULATE = 10; 
@@ -270,7 +270,7 @@
         currentBoxes = [];
         ctx.clearRect(0, 0, canvas.width, canvas.height); 
         
-        // ★ iPhoneブラックアウト対策の決定版：カメラを物理的に再起動する
+        // ★ iPhoneブラックアウト対策：カメラを物理的に再起動する
         camStatus.innerText = "カメラ再起動中...";
         camStatus.style.display = "block";
         initCamera(); 
@@ -293,7 +293,7 @@
         if (isFrozen || isAccumulating) {
             resetShutter();
         } else {
-            // ★撮影ボタンを押した瞬間の処理（動画は止めず、20回スキャン開始）
+            // ★撮影ボタンを押した瞬間の処理（動画は止めず、10回スキャン開始）
             isAccumulating = true;
             accumulateCount = 0;
             accumulatedBoxes = [];
@@ -367,7 +367,7 @@
                     drawBox(boxInfo, '#9932CC'); 
                 });
             } else {
-                // ★バーストスキャン中（映像を動かしながら20回推論）
+                // ★バーストスキャン中
                 predictions.forEach(p => {
                     const w = p.bbox.width * scaleX;
                     const h = p.bbox.height * scaleY;
@@ -381,7 +381,7 @@
                 accumulateCount++;
                 
                 if (accumulateCount >= MAX_ACCUMULATE) {
-                    // 20回のスキャン完了！ここで初めて映像を止める
+                    // スキャン完了！
                     isAccumulating = false;
                     isFrozen = true;
                     video.pause();
@@ -405,7 +405,6 @@
 
     // --- 基準丸太のタップ検知 ---
     canvas.addEventListener('click', (e) => {
-        // ★ 手動追加を完全に廃止したため、計算完了後（isCalculated = true）は何もしない
         if (!isFrozen || currentBoxes.length === 0 || isCalculated) return;
 
         const rect = canvas.getBoundingClientRect();
@@ -514,6 +513,7 @@
         ctx.lineWidth = 3; ctx.strokeText(`${text}`, x + 8, y + 6); ctx.fillText(`${text}`, x + 8, y + 6);
     }
 
+    // --- ★ AQUOS/Android 対応版：自動スクショ保存＆GPS書き込み ---
     function autoSaveScreenshotWithGPS() {
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
@@ -555,12 +555,17 @@
             offCtx.fillText(`位置情報: 取得できませんでした`, 20, offCanvas.height - 25);
         }
 
+        // ★ AQUOS対策：リンクをbodyに追加してからクリックする（Androidのお作法）
         const link = document.createElement('a');
         link.download = `丸太検尺_${Date.now()}.jpg`;
         link.href = offCanvas.toDataURL('image/jpeg', 0.9);
+        
+        document.body.appendChild(link); // 一旦DOMに追加
         link.click();
+        document.body.removeChild(link); // クリック後に削除
     }
 
+    // --- 以下、テーブル設定等 ---
     function renderTable() {
         const list = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
         const tbody = document.querySelector('#dataTable tbody');
@@ -628,13 +633,3 @@
 </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
