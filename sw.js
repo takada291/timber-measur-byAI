@@ -1,4 +1,4 @@
-const CACHE_NAME = 'timber-measur-byAI_v1.9.0'; // 
+const CACHE_NAME = 'timber-measur-byAI_v1.9.1'; // 
 const urlsToCache = [
   './',
   'index.html',
@@ -39,6 +39,7 @@ self.addEventListener('fetch', (event) => {
   );
 
 });
+
 
 
 
