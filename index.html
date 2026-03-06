@@ -60,7 +60,7 @@
 
 <div class="card">
     <div class="header-area">
-        <h2>AI検尺アプリ Ver 1.9</h2>
+        <h2>AI検尺アプリ Ver 2.0</h2>
         <button class="settings-btn" onclick="openSettings()">⚙️ 設定</button>
     </div>
 
@@ -135,7 +135,7 @@
 <div id="savePreviewModal" class="modal">
     <div class="modal-content">
         <h3 style="margin-top:0; color:#1565c0;">📸 保存プレビュー</h3>
-        <p style="font-size:0.8em; color:#666;">撮影日時・GPS情報付き</p>
+        <p style="font-size:0.8em; color:#666;">撮影日時・GPS・検知結果付き</p>
         <img id="previewImg" style="width:100%; border-radius:8px; border:2px solid #ccc; margin-bottom:10px;">
         <div style="display:flex; gap:10px; margin-top:10px;">
             <button class="btn-del" style="flex:1; padding:10px; background:#666;" onclick="closeSaveModal()">閉じる</button>
@@ -162,14 +162,14 @@
     let cameraStream;
     let currentBoxes = []; 
     
-    // バースト検知用の設定 (★20回に変更)
+    // バースト検知用の設定 (20回)
     let isAccumulating = false;
     let accumulateCount = 0;
     const MAX_ACCUMULATE = 20; 
     let accumulatedBoxes = [];
 
     let selectedBoxForCalc = null;
-    let previewDataUrl = null; // 保存用画像のデータ
+    let previewDataUrl = null; 
 
     window.onload = function() {
         if ('serviceWorker' in navigator) {
@@ -433,7 +433,10 @@
         const pxPerCm = baseBox.w / realSizeCm;
         const treeType = document.getElementById('m_treeType').value || "スギ";
         const length = parseFloat(document.getElementById('m_length').value) || 4;
+        
         let addedCount = 0;
+        let addedVolume = 0; // ★追加: 今回の材積合計用変数
+        
         const list = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -441,7 +444,10 @@
             let estDia = Math.max(1, Math.round(box.w / pxPerCm));
             let vol = calculateVolume(estDia, length);
             list.unshift({ id: Date.now() + Math.random(), tree: treeType, length: length, diameter: estDia, volume: vol, memo: 'AI推定' });
+            
             addedCount++;
+            addedVolume += vol; // ★追加: 計算した材積を足していく
+            
             const cx = box.x + box.w / 2;
             const cy = box.y + box.h / 2;
             drawDotAndText(cx, cy, estDia, '#39ff14'); 
@@ -459,8 +465,8 @@
         shutterBtn.innerText = "🔄 次の撮影へ（リセット）";
         shutterBtn.style.background = "#1565c0"; 
 
-        // ★計算完了後、すぐにプレビューモーダルを準備して表示
-        showSavePreview();
+        // ★引数として検知数と材積合計を渡す
+        showSavePreview(addedCount, addedVolume);
     }
 
     function calculateVolume(dia, len) {
@@ -477,27 +483,27 @@
         ctx.lineWidth = 3; ctx.strokeText(`${text}`, x + 8, y + 6); ctx.fillText(`${text}`, x + 8, y + 6);
     }
 
-    // --- ★ AQUOS対策：ポップアップで確認してから保存する方式 ---
-    function showSavePreview() {
+    // --- ★ AQUOS対策 ＆ 文字合成追加 ---
+    function showSavePreview(count, volume) {
         document.getElementById('calibMsg').innerHTML = "⏳ 画像生成中...";
         
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
                 (position) => {
-                    generateImage(position.coords.latitude.toFixed(5), position.coords.longitude.toFixed(5));
+                    generateImage(position.coords.latitude.toFixed(5), position.coords.longitude.toFixed(5), count, volume);
                 },
                 (error) => {
                     console.log("GPSエラー", error);
-                    generateImage(null, null);
+                    generateImage(null, null, count, volume);
                 },
                 { timeout: 5000 }
             );
         } else {
-            generateImage(null, null);
+            generateImage(null, null, count, volume);
         }
     }
 
-    function generateImage(lat, lon) {
+    function generateImage(lat, lon, count, volume) {
         const offCanvas = document.createElement('canvas');
         offCanvas.width = canvas.width;
         offCanvas.height = canvas.height;
@@ -507,16 +513,27 @@
         offCtx.drawImage(canvas, 0, 0);
 
         const timeStr = new Date().toLocaleString('ja-JP');
+        const countStr = count || 0;
+        const volStr = volume ? volume.toFixed(3) : "0.000";
+
+        // ★背景の黒帯を縦に広く修正（3行のテキストが入るように）
         offCtx.fillStyle = "rgba(0,0,0,0.6)";
-        offCtx.fillRect(10, offCanvas.height - 75, 320, 65);
+        offCtx.fillRect(10, offCanvas.height - 105, 400, 95);
+        
         offCtx.fillStyle = "#FFFFFF";
         offCtx.font = "16px Arial";
-        offCtx.fillText(`撮影日時: ${timeStr}`, 20, offCanvas.height - 50);
+        
+        // ★テキストを3行にして合成
+        offCtx.fillText(`撮影日時: ${timeStr}`, 20, offCanvas.height - 80);
+        
         if (lat && lon) {
-            offCtx.fillText(`位置情報: Lat ${lat}, Lon ${lon}`, 20, offCanvas.height - 25);
+            offCtx.fillText(`位置情報: Lat ${lat}, Lon ${lon}`, 20, offCanvas.height - 55);
         } else {
-            offCtx.fillText(`位置情報: 取得できませんでした`, 20, offCanvas.height - 25);
+            offCtx.fillText(`位置情報: 取得できませんでした`, 20, offCanvas.height - 55);
         }
+        
+        // ★今回追加した本数と材積の行
+        offCtx.fillText(`検知結果: ${countStr}本 / 材積合計: ${volStr} m3`, 20, offCanvas.height - 30);
 
         previewDataUrl = offCanvas.toDataURL('image/jpeg', 0.9);
         
@@ -536,7 +553,6 @@
         link.download = `丸太検尺_${Date.now()}.jpg`;
         link.href = previewDataUrl;
         
-        // ★ AQUOS対策：DOMに追加してクリック
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -613,4 +629,3 @@
 </script>
 </body>
 </html>
-
