@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI検尺アプリ</title>
+    <title>AI検知</title>
     
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#8b4513">
@@ -60,7 +60,7 @@
 
 <div class="card">
     <div class="header-area">
-        <h2>AI検尺アプリ Ver 2.0</h2>
+        <h2>AI検知 Ver2.1</h2>
         <button class="settings-btn" onclick="openSettings()">⚙️ 設定</button>
     </div>
 
@@ -68,6 +68,12 @@
         <div class="camera-controls">
             <button class="btn-ai-start" id="aiStartBtn" onclick="toggleAI()">🚀 検知スタート</button>
             <button class="btn-shutter" id="shutterBtn" onclick="toggleShutter()">📸 撮影＆検知</button>
+        </div>
+        
+        <div style="text-align: right; margin-bottom: 10px;">
+            <label style="background: #fff; padding: 6px 12px; border-radius: 20px; font-size: 0.9em; box-shadow: 0 1px 3px rgba(0,0,0,0.2); cursor: pointer; color: #1565c0; font-weight: bold;">
+                <input type="checkbox" id="brightnessToggle" onchange="toggleBrightness()"> 🔆 暗所補正（明るく）
+            </label>
         </div>
         
         <div id="camera-container">
@@ -162,7 +168,7 @@
     let cameraStream;
     let currentBoxes = []; 
     
-    // バースト検知用の設定 (20→10回)
+    // バースト検知用の設定 (10回)
     let isAccumulating = false;
     let accumulateCount = 0;
     const MAX_ACCUMULATE = 10; 
@@ -222,6 +228,13 @@
             camStatus.style.display = "block";
         }
     }
+    
+    // ★追加：映像の見た目を明るくする機能
+    function toggleBrightness() {
+        const isChecked = document.getElementById('brightnessToggle').checked;
+        // 明るさ1.4倍、コントラスト1.2倍（くっきりさせる）
+        video.style.filter = isChecked ? 'brightness(1.4) contrast(1.2)' : 'none';
+    }
 
     async function toggleAI() {
         const btn = document.getElementById('aiStartBtn');
@@ -246,7 +259,7 @@
                     });
                     logModel = await rf.load({
                         model: "my-first-project-bjosg",
-                        version: 11 
+                        version: 12 
                     });
                 } catch (e) {
                     alert("モデル読込失敗: " + (e.message || e));
@@ -334,7 +347,24 @@
     async function detectFrame() {
         if(!isAILunning || (isFrozen && !isAccumulating)) return; 
         if(video.readyState === 4 && logModel) {
-            const predictions = await logModel.detect(video);
+            
+            // ★追加：暗所補正がONの場合、裏側で明るくした画像をAIに渡す
+            let detectTarget = video;
+            if (document.getElementById('brightnessToggle').checked) {
+                if (!window.hiddenCanvas) {
+                    window.hiddenCanvas = document.createElement('canvas');
+                }
+                window.hiddenCanvas.width = video.videoWidth;
+                window.hiddenCanvas.height = video.videoHeight;
+                const hCtx = window.hiddenCanvas.getContext('2d');
+                hCtx.filter = 'brightness(1.4) contrast(1.2)';
+                hCtx.drawImage(video, 0, 0, window.hiddenCanvas.width, window.hiddenCanvas.height);
+                detectTarget = window.hiddenCanvas;
+            }
+
+            // 明るく補正された画像（またはそのままの動画）をAIに解析させる
+            const predictions = await logModel.detect(detectTarget);
+            
             const rect = video.getBoundingClientRect();
             canvas.width = rect.width;
             canvas.height = rect.height;
@@ -435,7 +465,7 @@
         const length = parseFloat(document.getElementById('m_length').value) || 4;
         
         let addedCount = 0;
-        let addedVolume = 0; // ★追加: 今回の材積合計用変数
+        let addedVolume = 0; 
         
         const list = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -446,7 +476,7 @@
             list.unshift({ id: Date.now() + Math.random(), tree: treeType, length: length, diameter: estDia, volume: vol, memo: 'AI推定' });
             
             addedCount++;
-            addedVolume += vol; // ★追加: 計算した材積を足していく
+            addedVolume += vol; 
             
             const cx = box.x + box.w / 2;
             const cy = box.y + box.h / 2;
@@ -465,7 +495,6 @@
         shutterBtn.innerText = "🔄 次の撮影へ（リセット）";
         shutterBtn.style.background = "#1565c0"; 
 
-        // ★引数として検知数と材積合計を渡す
         showSavePreview(addedCount, addedVolume);
     }
 
@@ -483,7 +512,6 @@
         ctx.lineWidth = 3; ctx.strokeText(`${text}`, x + 8, y + 6); ctx.fillText(`${text}`, x + 8, y + 6);
     }
 
-    // --- ★ AQUOS対策 ＆ 文字合成追加 ---
     function showSavePreview(count, volume) {
         document.getElementById('calibMsg').innerHTML = "⏳ 画像生成中...";
         
@@ -509,21 +537,28 @@
         offCanvas.height = canvas.height;
         const offCtx = offCanvas.getContext('2d');
 
+        // ★追加：保存する画像にも暗所補正を適用して焼き付ける
+        if (document.getElementById('brightnessToggle').checked) {
+            offCtx.filter = 'brightness(1.4) contrast(1.2)';
+        } else {
+            offCtx.filter = 'none';
+        }
+        
         offCtx.drawImage(video, 0, 0, offCanvas.width, offCanvas.height);
+        offCtx.filter = 'none'; // テキスト描画用にフィルターをリセット
+        
         offCtx.drawImage(canvas, 0, 0);
 
         const timeStr = new Date().toLocaleString('ja-JP');
         const countStr = count || 0;
         const volStr = volume ? volume.toFixed(3) : "0.000";
 
-        // ★背景の黒帯を縦に広く修正（3行のテキストが入るように）
         offCtx.fillStyle = "rgba(0,0,0,0.6)";
         offCtx.fillRect(10, offCanvas.height - 105, 400, 95);
         
         offCtx.fillStyle = "#FFFFFF";
         offCtx.font = "16px Arial";
         
-        // ★テキストを3行にして合成
         offCtx.fillText(`撮影日時: ${timeStr}`, 20, offCanvas.height - 80);
         
         if (lat && lon) {
@@ -532,12 +567,10 @@
             offCtx.fillText(`位置情報: 取得できませんでした`, 20, offCanvas.height - 55);
         }
         
-        // ★今回追加した本数と材積の行
         offCtx.fillText(`検知結果: ${countStr}本 / 材積合計: ${volStr} m3`, 20, offCanvas.height - 30);
 
         previewDataUrl = offCanvas.toDataURL('image/jpeg', 0.9);
         
-        // モーダルに画像を表示
         document.getElementById('previewImg').src = previewDataUrl;
         document.getElementById('savePreviewModal').style.display = 'block';
         document.getElementById('calibMsg').innerHTML = "✅ 保存準備完了";
@@ -561,7 +594,6 @@
         closeSaveModal();
     }
 
-    // --- 以下、テーブル設定等 ---
     function renderTable() {
         const list = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
         const tbody = document.querySelector('#dataTable tbody');
@@ -629,7 +661,3 @@
 </script>
 </body>
 </html>
-
-
-
-
