@@ -10,7 +10,7 @@
     
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
-    <meta name="apple-mobile-web-app-title" content="AI検尺">
+    <meta name="apple-mobile-web-app-title" content="AI検知">
     <link rel="apple-touch-icon" href="icon-512.png">
 
     <script src="https://cdn.roboflow.com/0.2.26/roboflow.js"></script>
@@ -583,7 +583,7 @@
     function downloadImage() {
         if (!previewDataUrl) return;
         const link = document.createElement('a');
-        link.download = `丸太検尺_${Date.now()}.jpg`;
+        link.download = `丸太検知_${Date.now()}.jpg`;
         link.href = previewDataUrl;
         
         document.body.appendChild(link);
@@ -661,3 +661,4 @@
 </script>
 </body>
 </html>
+
