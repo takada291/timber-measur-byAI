@@ -168,10 +168,10 @@
     let cameraStream;
     let currentBoxes = []; 
     
-    // バースト検知用の設定 (10回)
+    // バースト検知用の設定 (15回)
     let isAccumulating = false;
     let accumulateCount = 0;
-    const MAX_ACCUMULATE = 10; 
+    const MAX_ACCUMULATE = 15; 
     let accumulatedBoxes = [];
 
     let selectedBoxForCalc = null;
@@ -661,6 +661,7 @@
 </script>
 </body>
 </html>
+
 
 
 
