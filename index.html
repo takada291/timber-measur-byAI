@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI検知</title>
+    <title>AI検尺アプリ</title>
     
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#8b4513">
     
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
-    <meta name="apple-mobile-web-app-title" content="AI検知">
+    <meta name="apple-mobile-web-app-title" content="AI検尺">
     <link rel="apple-touch-icon" href="icon-512.png">
 
     <script src="https://cdn.roboflow.com/0.2.26/roboflow.js"></script>
@@ -64,7 +64,7 @@
 
 <div class="card">
     <div class="header-area">
-        <h2>AI検知検尺アプリ Ver 3.0 <span style="font-size:0.7em; color:#e65100;">(Cloud Native)</span></h2>
+        <h2>AI検尺アプリ Ver 3.1 <span style="font-size:0.7em; color:#e65100;">(手ブレ防止Cloud)</span></h2>
         <button class="settings-btn" onclick="openSettings()">⚙️ 設定</button>
     </div>
 
@@ -298,7 +298,6 @@
         camStatus.style.display = "block";
         initCamera(); 
         
-        // ★UIリセット修正箇所
         shutterBtn.innerText = "📸 撮影＆検知";
         shutterBtn.style.background = "#e65100";
         calibArea.style.display = "none";
@@ -307,9 +306,6 @@
         setTimeout(detectFrame, 500);
     }
 
-    // ==========================================
-    // ★大進化：シャッターボタンの動作分岐
-    // ==========================================
     async function toggleShutter() {
         if (!isAILunning) return;
         
@@ -323,72 +319,82 @@
         const calibArea = document.getElementById('calibration-area');
         const calibMsg = document.getElementById('calibMsg');
         
-        document.getElementById('togglesDiv').style.display = "none"; // 撮影中はトグルを隠す
+        document.getElementById('togglesDiv').style.display = "none"; 
 
         if (isCloudMode) {
             // ---------------------------------
-            // ① 【Ver 3.0】クラウド一発解析モード
+            // ① 【Ver 3.1】手ブレ防止ディレイ付き クラウド解析
             // ---------------------------------
             isFrozen = true;
-            video.pause(); // 画面を瞬時に止める（手ブレなし！）
-            
-            shutterBtn.innerText = "⏳ クラウド解析中...";
+            shutterBtn.innerText = "⏳ 安定化中...";
             shutterBtn.style.background = "#8e44ad";
             calibArea.style.display = "block";
-            calibMsg.innerHTML = `☁️ クラウドAIに画像を送信・解析中...（1〜3秒）`;
+            calibMsg.innerHTML = `カメラのブレを抑えるため、そのまま0.5秒キープしてください...`;
 
-            try {
-                // 現在の静止画を取得（明るさ補正込み）
-                const tempCanvas = document.createElement('canvas');
-                tempCanvas.width = video.videoWidth;
-                tempCanvas.height = video.videoHeight;
-                const tempCtx = tempCanvas.getContext('2d');
-                if (document.getElementById('brightnessToggle').checked) {
-                    tempCtx.filter = 'brightness(1.4) contrast(1.2)';
-                }
-                tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
-                const base64Image = tempCanvas.toDataURL("image/jpeg").split(',')[1];
-                
-                // クラウドへ送信
-                const response = await fetch(`https://detect.roboflow.com/${PROJECT_NAME}/${MODEL_VERSION}?api_key=${API_KEY}&confidence=40&overlap=30`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                    body: base64Image
-                });
-                const data = await response.json();
-                
-                currentBoxes = []; // ローカルの結果を捨ててクラウド結果を100%信用する
-                
-                if(data && data.predictions) {
-                    const rect = video.getBoundingClientRect();
-                    const scaleX = rect.width / video.videoWidth;
-                    const scaleY = rect.height / video.videoHeight;
+            // 手ブレが収まるまで0.5秒待つ魔法のディレイ
+            setTimeout(async () => {
+                video.pause(); // ここでブレのない静止画を確定！
+                calibMsg.innerHTML = `☁️ クラウドAIに画像を送信・解析中...（1〜3秒）`;
+                shutterBtn.innerText = "⏳ クラウド解析中...";
+
+                try {
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = video.videoWidth;
+                    tempCanvas.height = video.videoHeight;
+                    const tempCtx = tempCanvas.getContext('2d');
+                    if (document.getElementById('brightnessToggle').checked) {
+                        tempCtx.filter = 'brightness(1.4) contrast(1.2)';
+                    }
+                    tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+                    const base64Image = tempCanvas.toDataURL("image/jpeg").split(',')[1];
                     
-                    data.predictions.forEach(p => {
-                        const w = p.width * scaleX;
-                        const h = p.height * scaleY;
-                        const x = (p.x * scaleX) - (w / 2);
-                        const y = (p.y * scaleY) - (h / 2);
-                        const text = `${p.class}`;
-                        const textWidth = ctx.measureText(text).width;
-                        currentBoxes.push({ x, y, w, h, text, textWidth });
+                    const response = await fetch(`https://detect.roboflow.com/${PROJECT_NAME}/${MODEL_VERSION}?api_key=${API_KEY}&confidence=40&overlap=30`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                        body: base64Image
                     });
+                    
+                    const data = await response.json();
+                    
+                    // APIエラーが返ってきた場合の安全装置
+                    if(data.error) {
+                        alert("APIエラーが発生しました: " + data.error.message);
+                        resetShutter();
+                        return;
+                    }
+                    
+                    currentBoxes = []; 
+                    
+                    if(data && data.predictions) {
+                        const rect = video.getBoundingClientRect();
+                        const scaleX = rect.width / video.videoWidth;
+                        const scaleY = rect.height / video.videoHeight;
+                        
+                        data.predictions.forEach(p => {
+                            const w = p.width * scaleX;
+                            const h = p.height * scaleY;
+                            const x = (p.x * scaleX) - (w / 2);
+                            const y = (p.y * scaleY) - (h / 2);
+                            const text = `${p.class}`;
+                            const textWidth = ctx.measureText(text).width;
+                            currentBoxes.push({ x, y, w, h, text, textWidth });
+                        });
+                    }
+                    
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    currentBoxes = mergeBoxes(currentBoxes); 
+                    currentBoxes.forEach(b => drawBox(b, '#9932CC'));
+                    
+                    shutterBtn.innerText = "🔄 やり直し";
+                    shutterBtn.style.background = "#6c757d";
+                    calibMsg.innerHTML = `✅ 完了！画面内の<b>基準となる丸太の枠をタップ</b>してください。<br>（検知数: ${currentBoxes.length}本）`;
+                    calibMsg.style.color = "#e65100";
+                    
+                } catch(e) {
+                    alert("通信エラー: " + e.message + "\n※電波がない場合はチェックを外してオフラインモードをお使いください。");
+                    resetShutter();
                 }
-                
-                // 描画
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                currentBoxes = mergeBoxes(currentBoxes); // 重なり整理
-                currentBoxes.forEach(b => drawBox(b, '#9932CC'));
-                
-                shutterBtn.innerText = "🔄 やり直し";
-                shutterBtn.style.background = "#6c757d";
-                calibMsg.innerHTML = `✅ 完了！画面内の<b>基準となる丸太の枠をタップ</b>してください。`;
-                calibMsg.style.color = "#e65100";
-                
-            } catch(e) {
-                alert("通信エラー: " + e.message + "\n※電波がない場合はチェックを外してオフラインモードをお使いください。");
-                resetShutter();
-            }
+            }, 500); // 500ミリ秒（0.5秒）のディレイ
 
         } else {
             // ---------------------------------
@@ -473,7 +479,6 @@
                     drawBox(boxInfo, '#9932CC'); 
                 });
             } else {
-                // オフライン時のバースト処理
                 predictions.forEach(p => {
                     const w = p.bbox.width * scaleX;
                     const h = p.bbox.height * scaleY;
