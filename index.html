@@ -35,6 +35,9 @@
         .camera-controls { display: flex; justify-content: space-between; margin-bottom: 10px; gap: 10px; }
         .btn-ai-start { flex: 1; background: #1565c0; color: white; padding: 12px; border: none; border-radius: 6px; font-weight: bold; font-size: 1rem; }
         .btn-shutter { flex: 1; background: #e65100; color: white; padding: 12px; border: none; border-radius: 6px; font-weight: bold; font-size: 1rem; display: none; }
+        
+        /* ★追加：クラウドボタン用 */
+        .btn-cloud { background: #8e44ad; color: white; padding: 12px; border: none; border-radius: 6px; font-weight: bold; font-size: 1rem; width: 100%; margin-bottom: 12px; display: none; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
 
         /* --- 計測設定エリア --- */
         #calibration-area { background: #fff3e0; padding: 12px; border-radius: 8px; margin-top: 15px; display: none; border: 2px solid #ffb74d; }
@@ -60,7 +63,7 @@
 
 <div class="card">
     <div class="header-area">
-        <h2>AI検知 Ver2.6</h2>
+        <h2>AI検尺アプリ Ver 2.7 <span style="font-size:0.7em; color:#8e44ad;">(Hybrid)</span></h2>
         <button class="settings-btn" onclick="openSettings()">⚙️ 設定</button>
     </div>
 
@@ -83,6 +86,8 @@
         </div>
         
         <div id="calibration-area">
+            <button class="btn-cloud" id="cloudBtn" onclick="runCloudAI()">☁️ クラウド高精度解析を追加（通信使用）</button>
+            
             <p class="calib-message" id="calibMsg">✅ 画面を固定しました。<br>画面内の基準となる丸太の枠を<b>直接タップ</b>してください。</p>
             <div class="input-row">
                 <label>一括設定: 樹種</label>
@@ -151,6 +156,14 @@
 </div>
 
 <script>
+    // ==========================================
+    // ★ API設定（バージョンが上がったらここを変更！）
+    // ==========================================
+    const PROJECT_NAME = "my-first-project-bjosg";
+    const API_KEY = "rf_sRyNyDbysrbVYyp2FNCslDCxdpN2";
+    let MODEL_VERSION = 17; // ※ロボフローのバージョン
+    // ==========================================
+
     const STORAGE_KEY = 'timber_doubsta_data';
     const SETTINGS_KEY = 'timber_doubsta_settings';
     const DEFAULT_TREES = ['スギ', 'ヒノキ', '他針', '他広'];
@@ -168,7 +181,7 @@
     let cameraStream;
     let currentBoxes = []; 
     
-    // バースト検知用の設定 (10回)
+    // バースト検知用の設定
     let isAccumulating = false;
     let accumulateCount = 0;
     const MAX_ACCUMULATE = 10; 
@@ -229,10 +242,8 @@
         }
     }
     
-    // ★追加：映像の見た目を明るくする機能
     function toggleBrightness() {
         const isChecked = document.getElementById('brightnessToggle').checked;
-        // 明るさ1.4倍、コントラスト1.2倍（くっきりさせる）
         video.style.filter = isChecked ? 'brightness(1.4) contrast(1.2)' : 'none';
     }
 
@@ -246,6 +257,7 @@
             btn.innerText = "🚀 検知スタート";
             btn.style.background = "#1565c0";
             shutterBtn.style.display = "none";
+            document.getElementById('cloudBtn').style.display = "none";
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             currentBoxes = [];
         } else {
@@ -254,13 +266,8 @@
             btn.style.background = "#d32f2f";
             if(!logModel) {
                 try {
-                    const rf = await window.roboflow.auth({
-                        publishable_key: "rf_sRyNyDbysrbVYyp2FNCslDCxdpN2"
-                    });
-                    logModel = await rf.load({
-                        model: "my-first-project-bjosg",
-                        version: 17
-                    });
+                    const rf = await window.roboflow.auth({ publishable_key: API_KEY });
+                    logModel = await rf.load({ model: PROJECT_NAME, version: MODEL_VERSION });
                 } catch (e) {
                     alert("モデル読込失敗: " + (e.message || e));
                     isAILunning = false;
@@ -289,6 +296,7 @@
         shutterBtn.innerText = "📸 撮影＆検知";
         shutterBtn.style.background = "#e65100";
         calibArea.style.display = "none";
+        document.getElementById('cloudBtn').style.display = "none";
         setTimeout(detectFrame, 500);
     }
 
@@ -307,6 +315,7 @@
             shutterBtn.innerText = "⏳ スキャン中...";
             shutterBtn.style.background = "#d32f2f";
             calibArea.style.display = "block";
+            document.getElementById('cloudBtn').style.display = "none";
             calibMsg.innerHTML = `⏳ 高精度スキャンを実行中...<br><b>※スマホを動かさずにキープしてください！</b>`;
             calibMsg.style.color = "#d32f2f";
         }
@@ -348,12 +357,9 @@
         if(!isAILunning || (isFrozen && !isAccumulating)) return; 
         if(video.readyState === 4 && logModel) {
             
-            // ★追加：暗所補正がONの場合、裏側で明るくした画像をAIに渡す
             let detectTarget = video;
             if (document.getElementById('brightnessToggle').checked) {
-                if (!window.hiddenCanvas) {
-                    window.hiddenCanvas = document.createElement('canvas');
-                }
+                if (!window.hiddenCanvas) { window.hiddenCanvas = document.createElement('canvas'); }
                 window.hiddenCanvas.width = video.videoWidth;
                 window.hiddenCanvas.height = video.videoHeight;
                 const hCtx = window.hiddenCanvas.getContext('2d');
@@ -362,7 +368,6 @@
                 detectTarget = window.hiddenCanvas;
             }
 
-            // 明るく補正された画像（またはそのままの動画）をAIに解析させる
             const predictions = await logModel.detect(detectTarget);
             
             const rect = video.getBoundingClientRect();
@@ -403,17 +408,98 @@
                     currentBoxes = mergeBoxes(accumulatedBoxes);
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
                     currentBoxes.forEach(b => drawBox(b, '#9932CC'));
+                    
                     const shutterBtn = document.getElementById('shutterBtn');
                     const calibMsg = document.getElementById('calibMsg');
                     shutterBtn.innerText = "🔄 やり直し";
                     shutterBtn.style.background = "#6c757d";
                     calibMsg.innerHTML = `✅ 完了！画面内の<b>基準となる丸太の枠をタップ</b>してください。`;
                     calibMsg.style.color = "#e65100";
+                    
+                    // ★撮影完了後、クラウド補完ボタンを表示
+                    document.getElementById('cloudBtn').style.display = "block";
                 }
             }
         }
         setTimeout(detectFrame, isAccumulating ? 80 : 250); 
     }
+
+    // ==========================================
+    // ★追加：クラウド高精度解析（Roboflow Inference API）
+    // ==========================================
+    async function runCloudAI() {
+        const btn = document.getElementById('cloudBtn');
+        const calibMsg = document.getElementById('calibMsg');
+        btn.innerText = "⏳ クラウドのフルパワーで解析中...";
+        btn.style.background = "#d32f2f";
+        calibMsg.innerHTML = "通信環境により数秒〜十数秒かかります。そのままお待ちください...";
+
+        try {
+            // 現在一時停止している映像から画像を切り出す（明るさ補正込み）
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = video.videoWidth;
+            tempCanvas.height = video.videoHeight;
+            const tempCtx = tempCanvas.getContext('2d');
+            
+            if (document.getElementById('brightnessToggle').checked) {
+                tempCtx.filter = 'brightness(1.4) contrast(1.2)';
+            }
+            tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+            
+            // Base64エンコードしてサーバーに送る準備
+            const base64Image = tempCanvas.toDataURL("image/jpeg").split(',')[1];
+            
+            // Roboflow クラウドAPIへ送信
+            const response = await fetch(`https://detect.roboflow.com/${PROJECT_NAME}/${MODEL_VERSION}?api_key=${API_KEY}&confidence=40&overlap=30`, {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: base64Image
+            });
+            
+            const data = await response.json();
+            
+            if(data && data.predictions) {
+                const rect = video.getBoundingClientRect();
+                const scaleX = rect.width / video.videoWidth;
+                const scaleY = rect.height / video.videoHeight;
+                
+                let newFound = 0;
+                
+                // クラウドから返ってきた結果（ピクセル座標）をスマホの画面サイズに変換
+                data.predictions.forEach(p => {
+                    const w = p.width * scaleX;
+                    const h = p.height * scaleY;
+                    const x = (p.x * scaleX) - (w / 2);
+                    const y = (p.y * scaleY) - (h / 2);
+                    const text = `${p.class}`;
+                    const textWidth = ctx.measureText(text).width;
+                    
+                    currentBoxes.push({ x, y, w, h, text, textWidth });
+                    newFound++;
+                });
+                
+                // 元のスマホ検知分とクラウド検知分を合体（重複は消す）
+                const beforeCount = currentBoxes.length - newFound;
+                currentBoxes = mergeBoxes(currentBoxes);
+                const finalAdded = currentBoxes.length - beforeCount;
+                
+                // 画面を再描画
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                currentBoxes.forEach(b => drawBox(b, '#9932CC'));
+                
+                calibMsg.innerHTML = `✅ クラウド解析完了！新たに見逃しを <b>${finalAdded}本</b> 追加しました。<br>画面内の<b>基準となる丸太の枠をタップ</b>してください。`;
+            } else {
+                calibMsg.innerHTML = `✅ クラウド解析完了！（追加の見逃しはありませんでした）`;
+            }
+        } catch(e) {
+            alert("クラウド通信エラー: " + e.message + "\n※電波状況の良い場所でお試しください。");
+            calibMsg.innerHTML = `⚠️ 通信に失敗しました。基準となる丸太をタップして進めてください。`;
+        }
+        
+        // 処理が終わったらボタンを隠す
+        btn.style.display = "none";
+    }
+    // ==========================================
 
     canvas.addEventListener('click', (e) => {
         if (!isFrozen || currentBoxes.length === 0 || isCalculated) return;
@@ -486,6 +572,7 @@
         localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
         renderTable();
         isCalculated = true; 
+        document.getElementById('cloudBtn').style.display = "none"; // 計算完了後はクラウドボタンを消す
         
         const calibMsg = document.getElementById('calibMsg');
         calibMsg.innerHTML = `✅ ${addedCount}本を保存しました！<br><b>プレビュー確認後、保存してください。</b>`;
@@ -537,7 +624,6 @@
         offCanvas.height = canvas.height;
         const offCtx = offCanvas.getContext('2d');
 
-        // ★追加：保存する画像にも暗所補正を適用して焼き付ける
         if (document.getElementById('brightnessToggle').checked) {
             offCtx.filter = 'brightness(1.4) contrast(1.2)';
         } else {
@@ -545,7 +631,7 @@
         }
         
         offCtx.drawImage(video, 0, 0, offCanvas.width, offCanvas.height);
-        offCtx.filter = 'none'; // テキスト描画用にフィルターをリセット
+        offCtx.filter = 'none'; 
         
         offCtx.drawImage(canvas, 0, 0);
 
@@ -583,7 +669,7 @@
     function downloadImage() {
         if (!previewDataUrl) return;
         const link = document.createElement('a');
-        link.download = `丸太検知_${Date.now()}.jpg`;
+        link.download = `丸太検尺_${Date.now()}.jpg`;
         link.href = previewDataUrl;
         
         document.body.appendChild(link);
@@ -661,13 +747,3 @@
 </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
