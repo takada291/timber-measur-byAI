@@ -1,82 +1,618 @@
-const CACHE_NAME = 'timber-measur-byAI_v3.1.0'; // 
-const urlsToCache = [
-  './',
-  'index.html',
-  'manifest.json',
-  'sw.js',
-  'icon-512.png'
-];
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AI検知アプリ</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#8b4513">
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="AI検知">
+    <link rel="apple-touch-icon" href="icon-512.png">
 
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(urlsToCache);
-    })
-  );
-  self.skipWaiting();
-});
+    <script src="https://cdn.roboflow.com/0.2.26/roboflow.js"></script>
 
-self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
-  );
-  return self.clients.claim();
-});
+    <style>
+        body { font-family: -apple-system, sans-serif; padding: 10px; background: #fdf5e6; color: #333; margin: 0; padding-bottom: 40px; }
+        .card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .header-area { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #8b4513; margin-bottom: 10px; padding-bottom: 5px; }
+        h2 { margin: 0; font-size: 1.1em; color: #5d4037; }
+        .settings-btn { background: #6c757d; color: white; padding: 6px 12px; font-size: 0.85em; border-radius: 20px; border: none; cursor: pointer; }
 
-self.addEventListener('fetch', (event) => {
-  event.respondWith(
-    fetch(event.request).catch(() => {
-      return caches.match(event.request);
-    })
-  );
+        #camera-container { position: relative; width: 100%; border-radius: 8px; overflow: hidden; background: #000; display: flex; justify-content: center; align-items: center; min-height: 250px; }
+        video { width: 100%; height: auto; display: block; }
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; -webkit-touch-callout: none; user-select: none; touch-action: none; }
+        
+        .camera-controls { display: flex; justify-content: space-between; margin-bottom: 10px; gap: 10px; }
+        .btn-ai-start { flex: 1; background: #1565c0; color: white; padding: 12px; border: none; border-radius: 6px; font-weight: bold; font-size: 1rem; }
+        .btn-shutter { flex: 1; background: #e65100; color: white; padding: 12px; border: none; border-radius: 6px; font-weight: bold; font-size: 1rem; display: none; }
 
-});
+        #calibration-area { background: #fff3e0; padding: 12px; border-radius: 8px; margin-top: 15px; display: none; border: 2px solid #ffb74d; }
+        .calib-message { font-weight: bold; color: #e65100; margin-top: 0; margin-bottom: 10px; font-size: 0.95em; }
+        .input-row { margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;}
+        .input-row label { font-size: 0.9em; font-weight: bold; color: #5d4037; width: 30%;}
+        input, select { width: 65%; padding: 10px; border: 1px solid #d7ccc8; border-radius: 6px; font-size: 16px; box-sizing: border-box; background: white; }
 
+        .summary-box { display: flex; justify-content: space-between; background: #efebe9; padding: 10px; border-radius: 8px; margin: 20px 0 10px; font-weight: bold; color: #5d4037; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th, td { border: 1px solid #d7ccc8; padding: 8px 4px; text-align: center; }
+        th { background: #efebe9; }
+        .btn-del { background: #d32f2f; color: white; border: none; padding: 4px 8px; border-radius: 4px; }
+        .export-btn { width: 100%; background: #388e3c; color: white; padding: 12px; border: none; border-radius: 6px; margin-top: 10px; font-size: 1rem; font-weight: bold; }
 
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 99; }
+        .modal-content { background: white; margin: 5% auto; padding: 20px; width: 90%; max-width: 400px; border-radius: 12px; text-align: center; }
+        .close-btn { background: #666; color: white; width: 100%; padding: 10px; border: none; border-radius: 6px; margin-top: 15px; }
+    </style>
+</head>
+<body>
 
+<div class="card">
+    <div class="header-area">
+        <h2>AI検知 Ver 3.2</h2>
+        <button class="settings-btn" onclick="openSettings()">⚙️ 設定</button>
+    </div>
 
+    <div id="viewCamera">
+        <div class="camera-controls">
+            <button class="btn-ai-start" id="aiStartBtn" onclick="toggleAI()">🚀 検知スタート</button>
+            <button class="btn-shutter" id="shutterBtn" onclick="toggleShutter()">📸 撮影＆検知</button>
+        </div>
+        
+        <div id="camera-container">
+            <video id="webcam" autoplay playsinline muted></video>
+            <canvas id="overlay"></canvas>
+            <div id="camStatus" style="position: absolute; color: white; background: rgba(0,0,0,0.5); padding: 5px 10px; border-radius: 20px; z-index: 20;">カメラ起動待ち...</div>
+        </div>
+        
+        <div id="calibration-area">
+            <p class="calib-message" id="calibMsg">✅ 画面を固定しました。<br>画面内の基準となる丸太の枠を<b>直接タップ</b>してください。</p>
+            <div class="input-row">
+                <label>一括設定: 樹種</label>
+                <select id="m_treeType" class="tree-selector"></select>
+            </div>
+            <div class="input-row">
+                <label>一括設定: 長さ(m)</label>
+                <input type="number" id="m_length" value="4">
+            </div>
+        </div>
+    </div>
+</div>
 
+<div class="card">
+    <div class="summary-box">
+        <div>本数: <span id="totalCount">0</span> 本</div>
+        <div>材積: <span id="totalVolume">0.000</span> m3</div>
+    </div>
+    <div class="table-container">
+        <table id="dataTable">
+            <thead><tr><th>樹種</th><th>長</th><th>径</th><th>材積</th><th>操作</th></tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+    <button class="export-btn" onclick="handleExport()">CSV出力</button>
+    <div style="text-align:right; margin-top:10px;">
+        <button class="btn-del" style="background:#666;" onclick="handleAllClear()">全消去</button>
+    </div>
+</div>
 
+<div id="settingsModal" class="modal">
+    <div class="modal-content">
+        <div class="header-area"><h3>設定</h3></div>
+        <label>追加樹種 (最大5つ)</label>
+        <div id="customTreeInputs"></div>
+        <button class="export-btn" onclick="saveSettings()" style="margin-top:15px; background:#5d4037;">設定保存</button>
+        <button class="close-btn" onclick="closeSettings()">閉じる</button>
+    </div>
+</div>
 
+<div id="diameterModal" class="modal">
+    <div class="modal-content">
+        <h3 id="diaModalTitle" style="margin-top:0; color:#e65100;">基準サイズ入力</h3>
+        <p id="diaModalDesc" style="font-size:0.9em; margin-bottom:15px;">タップした丸太の末口直径(cm)を選択してください。</p>
+        <select id="diaSelect" style="margin-bottom:10px; font-size:1.2rem; padding:10px; width:100%;"></select>
+        <div id="manualDiaDiv" style="display:none; margin-bottom:10px;">
+            <input type="number" id="manualDiaInput" placeholder="手入力 (cm)" style="font-size:1.2rem; padding:10px; width:100%;">
+        </div>
+        <div style="display:flex; gap:10px; margin-top:15px;">
+            <button class="btn-del" style="flex:1; padding:12px; font-size:1rem;" onclick="closeDiaModal()">キャンセル</button>
+            <button class="btn-ai-start" style="flex:1; padding:12px; font-size:1rem; background:#388e3c;" onclick="confirmDiameter()">決定</button>
+        </div>
+    </div>
+</div>
 
+<div id="savePreviewModal" class="modal">
+    <div class="modal-content">
+        <h3 style="margin-top:0; color:#1565c0;">📸 保存プレビュー</h3>
+        <p style="font-size:0.8em; color:#666;">撮影日時・GPS・検知結果付き</p>
+        <img id="previewImg" style="width:100%; border-radius:8px; border:2px solid #ccc; margin-bottom:10px;">
+        <div style="display:flex; gap:10px; margin-top:10px;">
+            <button class="btn-del" style="flex:1; padding:10px; background:#666;" onclick="closeSaveModal()">閉じる</button>
+            <button class="btn-ai-start" style="flex:1; padding:10px; background:#e65100;" onclick="downloadImage()">💾 画像保存</button>
+        </div>
+    </div>
+</div>
 
+<script>
+    // ==========================================
+    // ★ API設定（バージョンが上がったらここを変更！）
+    // ==========================================
+    const PROJECT_NAME = "my-first-project-bjosg";
+    const API_KEY = "rf_sRyNyDbysrbVYyp2FNCslDCxdpN2";
+    let MODEL_VERSION = 17; // 現在の最新バージョン
+    // ==========================================
 
+    const STORAGE_KEY = 'timber_doubsta_data';
+    const SETTINGS_KEY = 'timber_doubsta_settings';
+    const DEFAULT_TREES = ['スギ', 'ヒノキ', '他針', '他広'];
+    let currentSettings = { customTrees: [] };
+    
+    const video = document.getElementById('webcam');
+    const canvas = document.getElementById('overlay');
+    const ctx = canvas.getContext('2d');
+    const camStatus = document.getElementById('camStatus');
+    
+    let logModel;
+    let isAILunning = false;
+    let isFrozen = false; 
+    let isCalculated = false; 
+    let cameraStream;
+    let currentBoxes = []; 
+    
+    let isAccumulating = false;
+    let accumulateCount = 0;
+    const MAX_ACCUMULATE = 10; 
+    let accumulatedBoxes = [];
 
+    let selectedBoxForCalc = null;
+    let previewDataUrl = null; 
 
+    window.onload = function() {
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW fail', err));
+        }
+        loadSettings();
+        renderTable();
+        const container = document.getElementById('customTreeInputs');
+        for(let i=1; i<=5; i++){
+            container.innerHTML += `<input type="text" id="customTree${i}" placeholder="追加${i}" style="margin-bottom:5px;">`;
+        }
+        initCamera(); 
+        initDiameterDropdown();
+    };
 
+    function initDiameterDropdown() {
+        const diaSelect = document.getElementById('diaSelect');
+        for(let i=10; i<=60; i+=2) { diaSelect.appendChild(new Option(`${i} cm`, i)); }
+        diaSelect.appendChild(new Option('その他 (手入力)', 'manual'));
+        diaSelect.value = "14";
+        diaSelect.addEventListener('change', (e) => {
+            document.getElementById('manualDiaDiv').style.display = e.target.value === 'manual' ? 'block' : 'none';
+        });
+    }
 
+    async function initCamera() {
+        try {
+            if(cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); }
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+                audio: false
+            });
+            video.srcObject = stream;
+            cameraStream = stream;
+            video.setAttribute('autoplay', '');
+            video.setAttribute('muted', '');
+            video.setAttribute('playsinline', '');
+            video.onloadedmetadata = () => {
+                video.play().catch(e => console.error("Auto-play prevented", e));
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                camStatus.style.display = "none";
+            };
+        } catch (err) {
+            camStatus.innerText = "カメラ起動失敗: " + err.message;
+            camStatus.style.display = "block";
+        }
+    }
 
+    async function toggleAI() {
+        const btn = document.getElementById('aiStartBtn');
+        const shutterBtn = document.getElementById('shutterBtn');
 
+        if(isAILunning) {
+            isAILunning = false;
+            if(isFrozen || isAccumulating) resetShutter(); 
+            btn.innerText = "🚀 検知スタート";
+            btn.style.background = "#1565c0";
+            shutterBtn.style.display = "none";
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            currentBoxes = [];
+        } else {
+            isAILunning = true;
+            btn.innerText = "⏳ 読込中...";
+            btn.style.background = "#d32f2f";
+            if(!logModel) {
+                try {
+                    const rf = await window.roboflow.auth({ publishable_key: API_KEY });
+                    logModel = await rf.load({ model: PROJECT_NAME, version: MODEL_VERSION });
+                } catch (e) {
+                    alert("モデル読込失敗: " + (e.message || e));
+                    isAILunning = false;
+                    btn.innerText = "🚀 検知スタート";
+                    btn.style.background = "#1565c0";
+                    return;
+                }
+            }
+            btn.innerText = "■ AI停止";
+            shutterBtn.style.display = "block";
+            detectFrame();
+        }
+    }
 
+    function resetShutter() {
+        const shutterBtn = document.getElementById('shutterBtn');
+        const calibArea = document.getElementById('calibration-area');
+        isFrozen = false;
+        isCalculated = false;
+        isAccumulating = false;
+        currentBoxes = [];
+        ctx.clearRect(0, 0, canvas.width, canvas.height); 
+        camStatus.innerText = "カメラ再起動中...";
+        camStatus.style.display = "block";
+        initCamera(); 
+        
+        shutterBtn.innerText = "📸 撮影＆検知";
+        shutterBtn.style.background = "#e65100";
+        calibArea.style.display = "none";
+        
+        setTimeout(detectFrame, 500);
+    }
 
+    function toggleShutter() {
+        if (!isAILunning) return;
+        if (isFrozen || isAccumulating) {
+            resetShutter();
+            return;
+        }
 
+        const shutterBtn = document.getElementById('shutterBtn');
+        const calibArea = document.getElementById('calibration-area');
+        const calibMsg = document.getElementById('calibMsg');
+        
+        isAccumulating = true;
+        accumulateCount = 0;
+        accumulatedBoxes = [];
+        shutterBtn.innerText = "⏳ スキャン中...";
+        shutterBtn.style.background = "#d32f2f";
+        calibArea.style.display = "block";
+        calibMsg.innerHTML = `⏳ 高精度スキャンを実行中...<br><b>※スマホを動かさずにキープしてください！</b>`;
+        calibMsg.style.color = "#d32f2f";
+    }
 
+    function drawBox(box, color) {
+        ctx.strokeStyle = color; 
+        ctx.lineWidth = 3;
+        ctx.strokeRect(box.x, box.y, box.w, box.h);
+        ctx.fillStyle = color;
+        ctx.font = '16px Arial';
+        ctx.fillRect(box.x, box.y - 20, box.textWidth + 4, 20);
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillText(box.text, box.x + 2, box.y - 5);
+    }
 
+    function mergeBoxes(boxes) {
+        const merged = [];
+        const threshold = 30; 
+        boxes.forEach(b => {
+            const cx = b.x + b.w / 2;
+            const cy = b.y + b.h / 2;
+            let found = false;
+            for(let mb of merged) {
+                const mcx = mb.x + mb.w / 2;
+                const mcy = mb.y + mb.h / 2;
+                if (Math.sqrt(Math.pow(cx - mcx, 2) + Math.pow(cy - mcy, 2)) < threshold) {
+                    found = true; break;
+                }
+            }
+            if(!found) merged.push(b);
+        });
+        return merged;
+    }
 
+    async function detectFrame() {
+        if(!isAILunning || (isFrozen && !isAccumulating)) return; 
+        if(video.readyState === 4 && logModel) {
+            
+            const predictions = await logModel.detect(video);
+            
+            const rect = video.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+            const scaleX = rect.width / video.videoWidth;
+            const scaleY = rect.height / video.videoHeight;
 
+            if (!isAccumulating) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                currentBoxes = []; 
+                predictions.forEach(p => {
+                    const w = p.bbox.width * scaleX;
+                    const h = p.bbox.height * scaleY;
+                    const x = (p.bbox.x * scaleX) - (w / 2);
+                    const y = (p.bbox.y * scaleY) - (h / 2);
+                    const text = `${p.class} ${Math.round(p.confidence * 100)}%`;
+                    const textWidth = ctx.measureText(text).width;
+                    const boxInfo = { x, y, w, h, text, textWidth };
+                    currentBoxes.push(boxInfo);
+                    drawBox(boxInfo, '#9932CC'); 
+                });
+            } else {
+                predictions.forEach(p => {
+                    const w = p.bbox.width * scaleX;
+                    const h = p.bbox.height * scaleY;
+                    const x = (p.bbox.x * scaleX) - (w / 2);
+                    const y = (p.bbox.y * scaleY) - (h / 2);
+                    const text = `${p.class}`;
+                    const textWidth = ctx.measureText(text).width;
+                    accumulatedBoxes.push({ x, y, w, h, text, textWidth });
+                });
+                accumulateCount++;
+                if (accumulateCount >= MAX_ACCUMULATE) {
+                    isAccumulating = false;
+                    isFrozen = true;
+                    video.pause();
+                    currentBoxes = mergeBoxes(accumulatedBoxes);
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    currentBoxes.forEach(b => drawBox(b, '#9932CC'));
+                    
+                    const shutterBtn = document.getElementById('shutterBtn');
+                    const calibMsg = document.getElementById('calibMsg');
+                    shutterBtn.innerText = "🔄 やり直し";
+                    shutterBtn.style.background = "#6c757d";
+                    calibMsg.innerHTML = `✅ 完了！画面内の<b>基準となる丸太の枠をタップ</b>してください。`;
+                    calibMsg.style.color = "#e65100";
+                }
+            }
+        }
+        setTimeout(detectFrame, isAccumulating ? 80 : 250); 
+    }
 
+    canvas.addEventListener('click', (e) => {
+        if (!isFrozen || currentBoxes.length === 0 || isCalculated) return;
+        const rect = canvas.getBoundingClientRect();
+        const clickX = e.clientX - rect.left;
+        const clickY = e.clientY - rect.top;
+        let clickedBox = null;
+        for (let i = currentBoxes.length - 1; i >= 0; i--) {
+            let box = currentBoxes[i];
+            if (clickX >= box.x && clickX <= box.x + box.w && clickY >= box.y && clickY <= box.y + box.h) {
+                clickedBox = box;
+                break;
+            }
+        }
+        if (clickedBox) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            currentBoxes.forEach(b => drawBox(b, '#9932CC'));
+            drawBox(clickedBox, '#e65100'); 
+            setTimeout(() => openDiaModal(clickedBox), 50);
+        }
+    });
 
+    function openDiaModal(box) {
+        selectedBoxForCalc = box;
+        document.getElementById('diaModalTitle').innerText = "基準サイズ入力";
+        document.getElementById('diaModalTitle').style.color = "#e65100"; 
+        document.getElementById('diameterModal').style.display = 'block';
+    }
+    function closeDiaModal() {
+        document.getElementById('diameterModal').style.display = 'none';
+        selectedBoxForCalc = null;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        currentBoxes.forEach(b => drawBox(b, '#9932CC'));
+    }
+    function confirmDiameter() {
+        const selectVal = document.getElementById('diaSelect').value;
+        let realSizeCm = parseFloat(selectVal === 'manual' ? document.getElementById('manualDiaInput').value : selectVal);
+        if(!realSizeCm || realSizeCm <= 0) {
+            alert("正しい数値を入力してください");
+            return;
+        }
+        document.getElementById('diameterModal').style.display = 'none';
+        calculateAllLogs(selectedBoxForCalc, realSizeCm);
+    }
 
+    function calculateAllLogs(baseBox, realSizeCm) {
+        const pxPerCm = baseBox.w / realSizeCm;
+        const treeType = document.getElementById('m_treeType').value || "スギ";
+        const length = parseFloat(document.getElementById('m_length').value) || 4;
+        
+        let addedCount = 0;
+        let addedVolume = 0; 
+        
+        const list = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+        currentBoxes.forEach(box => {
+            let estDia = Math.max(1, Math.round(box.w / pxPerCm));
+            let vol = calculateVolume(estDia, length);
+            list.unshift({ id: Date.now() + Math.random(), tree: treeType, length: length, diameter: estDia, volume: vol, memo: 'AI推定' });
+            
+            addedCount++;
+            addedVolume += vol; 
+            
+            const cx = box.x + box.w / 2;
+            const cy = box.y + box.h / 2;
+            drawDotAndText(cx, cy, estDia, '#39ff14'); 
+        });
 
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+        renderTable();
+        isCalculated = true; 
+        
+        const calibMsg = document.getElementById('calibMsg');
+        calibMsg.innerHTML = `✅ ${addedCount}本を保存しました！<br><b>プレビュー確認後、保存してください。</b>`;
+        calibMsg.style.color = "#388e3c"; 
 
+        const shutterBtn = document.getElementById('shutterBtn');
+        shutterBtn.innerText = "🔄 次の撮影へ（リセット）";
+        shutterBtn.style.background = "#1565c0"; 
 
+        showSavePreview(addedCount, addedVolume);
+    }
 
+    function calculateVolume(dia, len) {
+        let vol = len < 6 ? (dia * dia * len) / 10000 : (Math.pow(dia + (Math.floor(len) - 4) / 2, 2) * len) / 10000;
+        return Math.round(vol * 1000) / 1000;
+    }
 
+    function drawDotAndText(x, y, text, dotColor) {
+        ctx.beginPath();
+        ctx.arc(x, y, 6, 0, 2 * Math.PI);
+        ctx.fillStyle = dotColor; ctx.fill();
+        ctx.lineWidth = 2; ctx.strokeStyle = '#000000'; ctx.stroke();
+        ctx.fillStyle = '#FFFFFF'; ctx.font = 'bold 18px Arial';
+        ctx.lineWidth = 3; ctx.strokeText(`${text}`, x + 8, y + 6); ctx.fillText(`${text}`, x + 8, y + 6);
+    }
 
+    function showSavePreview(count, volume) {
+        document.getElementById('calibMsg').innerHTML = "⏳ 画像生成中...";
+        
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    generateImage(position.coords.latitude.toFixed(5), position.coords.longitude.toFixed(5), count, volume);
+                },
+                (error) => {
+                    console.log("GPSエラー", error);
+                    generateImage(null, null, count, volume);
+                },
+                { timeout: 5000 }
+            );
+        } else {
+            generateImage(null, null, count, volume);
+        }
+    }
 
+    function generateImage(lat, lon, count, volume) {
+        const offCanvas = document.createElement('canvas');
+        offCanvas.width = canvas.width;
+        offCanvas.height = canvas.height;
+        const offCtx = offCanvas.getContext('2d');
 
+        offCtx.drawImage(video, 0, 0, offCanvas.width, offCanvas.height);
+        offCtx.drawImage(canvas, 0, 0);
 
+        const timeStr = new Date().toLocaleString('ja-JP');
+        const countStr = count || 0;
+        const volStr = volume ? volume.toFixed(3) : "0.000";
 
+        offCtx.fillStyle = "rgba(0,0,0,0.6)";
+        offCtx.fillRect(10, offCanvas.height - 105, 400, 95);
+        
+        offCtx.fillStyle = "#FFFFFF";
+        offCtx.font = "16px Arial";
+        
+        offCtx.fillText(`撮影日時: ${timeStr}`, 20, offCanvas.height - 80);
+        
+        if (lat && lon) {
+            offCtx.fillText(`位置情報: Lat ${lat}, Lon ${lon}`, 20, offCanvas.height - 55);
+        } else {
+            offCtx.fillText(`位置情報: 取得できませんでした`, 20, offCanvas.height - 55);
+        }
+        
+        offCtx.fillText(`検知結果: ${countStr}本 / 材積合計: ${volStr} m3`, 20, offCanvas.height - 30);
 
+        previewDataUrl = offCanvas.toDataURL('image/jpeg', 0.9);
+        
+        document.getElementById('previewImg').src = previewDataUrl;
+        document.getElementById('savePreviewModal').style.display = 'block';
+        document.getElementById('calibMsg').innerHTML = "✅ 保存準備完了";
+    }
 
+    function closeSaveModal() {
+        document.getElementById('savePreviewModal').style.display = 'none';
+    }
 
+    function downloadImage() {
+        if (!previewDataUrl) return;
+        const link = document.createElement('a');
+        link.download = `丸太検尺_${Date.now()}.jpg`;
+        link.href = previewDataUrl;
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        alert("画像を保存しました！");
+        closeSaveModal();
+    }
 
+    function renderTable() {
+        const list = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        const tbody = document.querySelector('#dataTable tbody');
+        tbody.innerHTML = '';
+        let totalC = 0, totalV = 0;
+        list.forEach(item => {
+            totalC++; totalV += item.volume;
+            tbody.innerHTML += `<tr><td>${item.tree}</td><td>${item.length}</td><td>${item.diameter}</td><td>${item.volume.toFixed(3)}</td><td><button class="btn-del" onclick="deleteItem(${item.id})">×</button></td></tr>`;
+        });
+        document.getElementById('totalCount').innerText = totalC;
+        document.getElementById('totalVolume').innerText = totalV.toFixed(3);
+    }
+    function deleteItem(id) {
+        if(!confirm("削除しますか？")) return;
+        let list = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(list.filter(i => i.id !== id)));
+        renderTable();
+    }
+    function handleAllClear() {
+        if(!confirm("全データを消去しますか？")) return;
+        localStorage.removeItem(STORAGE_KEY);
+        renderTable();
+    }
+    function openSettings() {
+        for(let i=1; i<=5; i++){ document.getElementById(`customTree${i}`).value = currentSettings.customTrees[i-1] || ""; }
+        document.getElementById('settingsModal').style.display = 'block';
+    }
+    function closeSettings() { document.getElementById('settingsModal').style.display = 'none'; }
+    function saveSettings() {
+        let newTrees = [];
+        for(let i=1; i<=5; i++){
+            const val = document.getElementById(`customTree${i}`).value.trim();
+            if(val) newTrees.push(val);
+        }
+        currentSettings.customTrees = newTrees;
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(currentSettings));
+        updateTreeSelectors();
+        closeSettings();
+    }
+    function loadSettings() {
+        const saved = localStorage.getItem(SETTINGS_KEY);
+        if(saved) currentSettings = JSON.parse(saved);
+        updateTreeSelectors();
+    }
+    function updateTreeSelectors() {
+        const options = [...DEFAULT_TREES, ...currentSettings.customTrees];
+        document.querySelectorAll('.tree-selector').forEach(sel => {
+            const currentVal = sel.value;
+            sel.innerHTML = "";
+            options.forEach(t => sel.appendChild(new Option(t, t)));
+            if(options.includes(currentVal)) sel.value = currentVal;
+        });
+    }
+    function handleExport() {
+        const list = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        if(list.length === 0) return alert("データがありません");
+        let csv = "\ufeff樹種,材長,末口直径,材積,備考\n";
+        list.forEach(i => csv += `${i.tree},${i.length},${i.diameter},${i.volume},${i.memo || ''}\n`);
+        const a = document.createElement("a");
+        const now = new Date();
+        a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+        a.download = `丸太検知-${now.getFullYear()}${(now.getMonth()+1).toString().padStart(2,'0')}${now.getDate().toString().padStart(2,'0')}-${now.getHours().toString().padStart(2,'0')}${now.getMinutes().toString().padStart(2,'0')}.csv`;
+        a.click();
+    }
+</script>
+</body>
+</html>
