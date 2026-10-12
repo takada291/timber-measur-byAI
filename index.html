@@ -60,7 +60,7 @@
 
 <div class="card">
     <div class="header-area">
-        <h2>AI検知 Ver 5.6</h2>
+        <h2>AI検知 Ver 5.7</h2>
         <button class="settings-btn" onclick="openSettings()">⚙️ 設定</button>
     </div>
 
@@ -416,8 +416,7 @@
         const clickX = e.clientX - rect.left;
         const clickY = e.clientY - rect.top;
         let clickedBox = null;
-        for (let i = current execution; i >= 0; i--) { // Wait, typo fix below
-        }
+        
         for (let i = currentBoxes.length - 1; i >= 0; i--) {
             let box = currentBoxes[i];
             if (clickX >= box.x && clickX <= box.x + box.w && clickY >= box.y && clickY <= box.y + box.h) {
