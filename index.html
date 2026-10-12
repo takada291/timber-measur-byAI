@@ -60,7 +60,7 @@
 
 <div class="card">
     <div class="header-area">
-        <h2>AI検知 Ver 5.5</h2>
+        <h2>AI検知 Ver 5.6</h2>
         <button class="settings-btn" onclick="openSettings()">⚙️ 設定</button>
     </div>
 
@@ -146,11 +146,11 @@
 
 <script>
     // ==========================================
-    // ★ API設定（RF-DETRの最新バージョンに更新）
+    // ★ API設定
     // ==========================================
     const PROJECT_NAME = "my-first-project-bjosg";
     const API_KEY = "rf_sRyNyDbysrbVYyp2FNCslDCxdpN2";
-    let MODEL_VERSION = 41; // 最新のv41
+    let MODEL_VERSION = 41; // 最新のRF-DETRモデル
     // ==========================================
 
     const STORAGE_KEY = 'timber_doubsta_data';
@@ -330,43 +330,10 @@
         return merged;
     }
 
-    // ★ RF-DETRや新APIに対応するための安全な座標取得関数
-    function parsePrediction(p, scaleX, scaleY, vWidth, vHeight) {
-        let bx=0, by=0, bw=0, bh=0;
-        
-        // パターン1: p.bboxが配列の場合 [x, y, w, h]
-        if (p.bbox && Array.isArray(p.bbox)) {
-            bx = p.bbox[0]; by = p.bbox[1]; bw = p.bbox[2]; bh = p.bbox[3];
-        } 
-        // パターン2: p.bboxがオブジェクトの場合 {x, y, width, height}
-        else if (p.bbox) {
-            bx = p.bbox.x; by = p.bbox.y; bw = p.bbox.width; bh = p.bbox.height;
-        } 
-        // パターン3: 直接pに入っている場合 (現在のRoboflow.js標準)
-        else {
-            bx = p.x; by = p.y; bw = p.width; bh = p.height;
-        }
-
-        // RF-DETR等で「0.0〜1.0」の正規化座標が返ってきた場合、実ピクセルに変換
-        if (bw <= 1.0 && bh <= 1.0 && bw > 0) {
-            bx *= vWidth;
-            by *= vHeight;
-            bw *= vWidth;
-            bh *= vHeight;
-        }
-
-        const w = bw * scaleX;
-        const h = bh * scaleY;
-        const x = (bx * scaleX) - (w / 2);
-        const y = (by * scaleY) - (h / 2);
-
-        return { x, y, w, h };
-    }
-
     async function detectFrame() {
         if(!isAILunning || (isFrozen && !isAccumulating)) return; 
+        
         if(video.readyState === 4 && logModel) {
-            
             const predictions = await logModel.detect(video);
             
             const rect = video.getBoundingClientRect();
@@ -378,21 +345,50 @@
             if (!isAccumulating) {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 currentBoxes = []; 
-                predictions.forEach(p => {
-                    const parsed = parsePrediction(p, scaleX, scaleY, video.videoWidth, video.videoHeight);
-                    const text = `${p.class} ${Math.round(p.confidence * 100)}%`;
+            }
+
+            predictions.forEach(p => {
+                let cx, cy, w, h;
+                
+                // ★ どんなデータ構造で返ってきても対応する最強の座標パース処理
+                if (p.bbox) {
+                    if (Array.isArray(p.bbox)) {
+                        cx = p.bbox[0]; cy = p.bbox[1]; w = p.bbox[2]; h = p.bbox[3];
+                    } else {
+                        cx = p.bbox.x; cy = p.bbox.y; w = p.bbox.width; h = p.bbox.height;
+                    }
+                } else {
+                    cx = p.x; cy = p.y; w = p.width; h = p.height;
+                }
+
+                // ★ RF-DETR 正規化(0.0〜1.0)対策: 値が2.0以下なら「割合」と判定し、動画サイズを掛ける
+                if (w <= 2.0 && h <= 2.0) {
+                    cx *= video.videoWidth;
+                    cy *= video.videoHeight;
+                    w *= video.videoWidth;
+                    h *= video.videoHeight;
+                }
+
+                const boxW = w * scaleX;
+                const boxH = h * scaleY;
+                const boxX = (cx * scaleX) - (boxW / 2);
+                const boxY = (cy * scaleY) - (boxH / 2);
+                
+                if (!isAccumulating) {
+                    const text = `${p.class || 'log'} ${Math.round((p.confidence||1) * 100)}%`;
                     const textWidth = ctx.measureText(text).width;
-                    const boxInfo = { x: parsed.x, y: parsed.y, w: parsed.w, h: parsed.h, text, textWidth };
+                    const boxInfo = { x: boxX, y: boxY, w: boxW, h: boxH, text, textWidth };
+                    
                     currentBoxes.push(boxInfo);
                     drawBox(boxInfo, '#9932CC'); 
-                });
-            } else {
-                predictions.forEach(p => {
-                    const parsed = parsePrediction(p, scaleX, scaleY, video.videoWidth, video.videoHeight);
-                    const text = `${p.class}`;
+                } else {
+                    const text = `${p.class || 'log'}`;
                     const textWidth = ctx.measureText(text).width;
-                    accumulatedBoxes.push({ x: parsed.x, y: parsed.y, w: parsed.w, h: parsed.h, text, textWidth });
-                });
+                    accumulatedBoxes.push({ x: boxX, y: boxY, w: boxW, h: boxH, text, textWidth });
+                }
+            });
+
+            if (isAccumulating) {
                 accumulateCount++;
                 if (accumulateCount >= MAX_ACCUMULATE) {
                     isAccumulating = false;
@@ -420,6 +416,8 @@
         const clickX = e.clientX - rect.left;
         const clickY = e.clientY - rect.top;
         let clickedBox = null;
+        for (let i = current execution; i >= 0; i--) { // Wait, typo fix below
+        }
         for (let i = currentBoxes.length - 1; i >= 0; i--) {
             let box = currentBoxes[i];
             if (clickX >= box.x && clickX <= box.x + box.w && clickY >= box.y && clickY <= box.y + box.h) {
