@@ -20,8 +20,6 @@
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
-
-      // ここも測定IDに書き換えます
       gtag('config', 'G-WXBP6CPKLP');
     </script>
     
@@ -62,7 +60,7 @@
 
 <div class="card">
     <div class="header-area">
-        <h2>AI検知 Ver 5.4</h2>
+        <h2>AI検知 Ver 5.5</h2>
         <button class="settings-btn" onclick="openSettings()">⚙️ 設定</button>
     </div>
 
@@ -148,11 +146,11 @@
 
 <script>
     // ==========================================
-    // ★ API設定（バージョンが上がったらここを変更！）
+    // ★ API設定（RF-DETRの最新バージョンに更新）
     // ==========================================
     const PROJECT_NAME = "my-first-project-bjosg";
     const API_KEY = "rf_sRyNyDbysrbVYyp2FNCslDCxdpN2";
-    let MODEL_VERSION = 41; // 現在の最新バージョン
+    let MODEL_VERSION = 41; // 最新のv41
     // ==========================================
 
     const STORAGE_KEY = 'timber_doubsta_data';
@@ -332,6 +330,39 @@
         return merged;
     }
 
+    // ★ RF-DETRや新APIに対応するための安全な座標取得関数
+    function parsePrediction(p, scaleX, scaleY, vWidth, vHeight) {
+        let bx=0, by=0, bw=0, bh=0;
+        
+        // パターン1: p.bboxが配列の場合 [x, y, w, h]
+        if (p.bbox && Array.isArray(p.bbox)) {
+            bx = p.bbox[0]; by = p.bbox[1]; bw = p.bbox[2]; bh = p.bbox[3];
+        } 
+        // パターン2: p.bboxがオブジェクトの場合 {x, y, width, height}
+        else if (p.bbox) {
+            bx = p.bbox.x; by = p.bbox.y; bw = p.bbox.width; bh = p.bbox.height;
+        } 
+        // パターン3: 直接pに入っている場合 (現在のRoboflow.js標準)
+        else {
+            bx = p.x; by = p.y; bw = p.width; bh = p.height;
+        }
+
+        // RF-DETR等で「0.0〜1.0」の正規化座標が返ってきた場合、実ピクセルに変換
+        if (bw <= 1.0 && bh <= 1.0 && bw > 0) {
+            bx *= vWidth;
+            by *= vHeight;
+            bw *= vWidth;
+            bh *= vHeight;
+        }
+
+        const w = bw * scaleX;
+        const h = bh * scaleY;
+        const x = (bx * scaleX) - (w / 2);
+        const y = (by * scaleY) - (h / 2);
+
+        return { x, y, w, h };
+    }
+
     async function detectFrame() {
         if(!isAILunning || (isFrozen && !isAccumulating)) return; 
         if(video.readyState === 4 && logModel) {
@@ -348,25 +379,19 @@
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 currentBoxes = []; 
                 predictions.forEach(p => {
-                    const w = p.bbox.width * scaleX;
-                    const h = p.bbox.height * scaleY;
-                    const x = (p.bbox.x * scaleX) - (w / 2);
-                    const y = (p.bbox.y * scaleY) - (h / 2);
+                    const parsed = parsePrediction(p, scaleX, scaleY, video.videoWidth, video.videoHeight);
                     const text = `${p.class} ${Math.round(p.confidence * 100)}%`;
                     const textWidth = ctx.measureText(text).width;
-                    const boxInfo = { x, y, w, h, text, textWidth };
+                    const boxInfo = { x: parsed.x, y: parsed.y, w: parsed.w, h: parsed.h, text, textWidth };
                     currentBoxes.push(boxInfo);
                     drawBox(boxInfo, '#9932CC'); 
                 });
             } else {
                 predictions.forEach(p => {
-                    const w = p.bbox.width * scaleX;
-                    const h = p.bbox.height * scaleY;
-                    const x = (p.bbox.x * scaleX) - (w / 2);
-                    const y = (p.bbox.y * scaleY) - (h / 2);
+                    const parsed = parsePrediction(p, scaleX, scaleY, video.videoWidth, video.videoHeight);
                     const text = `${p.class}`;
                     const textWidth = ctx.measureText(text).width;
-                    accumulatedBoxes.push({ x, y, w, h, text, textWidth });
+                    accumulatedBoxes.push({ x: parsed.x, y: parsed.y, w: parsed.w, h: parsed.h, text, textWidth });
                 });
                 accumulateCount++;
                 if (accumulateCount >= MAX_ACCUMULATE) {
