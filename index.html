@@ -62,7 +62,7 @@
 
 <div class="card">
     <div class="header-area">
-        <h2>AI検知 Ver 5.3</h2>
+        <h2>AI検知 Ver 5.3.1</h2>
         <button class="settings-btn" onclick="openSettings()">⚙️ 設定</button>
     </div>
 
@@ -141,7 +141,7 @@
         <img id="previewImg" style="width:100%; border-radius:8px; border:2px solid #ccc; margin-bottom:10px;">
         <div style="display:flex; gap:10px; margin-top:10px;">
             <button class="btn-del" style="flex:1; padding:10px; background:#666;" onclick="closeSaveModal()">閉じる</button>
-            <button class="btn-ai-start" style="flex:1; padding:10px; background:#e65100;" onclick="downloadImage()">💾 画像保存</button>
+            <button class="btn-ai-start" style="flex:1; padding:10px; background:#e65100;" onclick="downloadImage()">💾 共有 / 保存</button>
         </div>
     </div>
 </div>
@@ -152,7 +152,7 @@
     // ==========================================
     const PROJECT_NAME = "my-first-project-bjosg";
     const API_KEY = "rf_sRyNyDbysrbVYyp2FNCslDCxdpN2";
-    let MODEL_VERSION = 40; // 現在の最新バージョン
+    let MODEL_VERSION = 40; // 安定版のRoboflow 3.0モデル
     // ==========================================
 
     const STORAGE_KEY = 'timber_doubsta_data';
@@ -545,17 +545,52 @@
         document.getElementById('savePreviewModal').style.display = 'none';
     }
 
-    function downloadImage() {
+    // ★ ネイティブの共有メニュー（Share API）を利用する保存関数
+    async function downloadImage() {
         if (!previewDataUrl) return;
+
+        const fileName = `丸太検尺_${Date.now()}.jpg`;
+
+        // 1. DataURL(Base64) を Blob(バイナリデータ) に変換
+        const arr = previewDataUrl.split(',');
+        const mime = arr[0].match(/:(.*?);/)[1];
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+        }
+        const blob = new Blob([u8arr], { type: mime });
+        const file = new File([blob], fileName, { type: mime });
+
+        // 2. iPhoneなどのネイティブ共有メニュー（Share API）が使えるか判定
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            try {
+                // 共有メニューを開く
+                await navigator.share({
+                    files: [file],
+                    title: '丸太検尺画像',
+                    text: '検知結果の画像です'
+                });
+                // 共有（または「画像を保存」）が完了したらモーダルを閉じる
+                closeSaveModal();
+                return;
+            } catch (error) {
+                console.log('共有がキャンセルされたか、失敗しました', error);
+                // ユーザーがキャンセルした場合は何もしない
+                // エラーで失敗した場合は下のフォールバック（通常ダウンロード）へ進む
+            }
+        }
+
+        // 3. パソコンや未対応ブラウザ用の従来のダウンロード処理（フォールバック）
         const link = document.createElement('a');
-        link.download = `丸太検尺_${Date.now()}.jpg`;
+        link.download = fileName;
         link.href = previewDataUrl;
-        
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         
-        alert("画像を保存しました！");
+        alert("画像をダウンロードしました！\n（iPhoneの場合は「ファイル」アプリをご確認ください）");
         closeSaveModal();
     }
 
