@@ -20,6 +20,8 @@
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
+
+      // ここも測定IDに書き換えます
       gtag('config', 'G-WXBP6CPKLP');
     </script>
     
@@ -60,7 +62,7 @@
 
 <div class="card">
     <div class="header-area">
-        <h2>AI検知 Ver 5.7</h2>
+        <h2>AI検知 Ver 5.3</h2>
         <button class="settings-btn" onclick="openSettings()">⚙️ 設定</button>
     </div>
 
@@ -146,11 +148,11 @@
 
 <script>
     // ==========================================
-    // ★ API設定
+    // ★ API設定（バージョンが上がったらここを変更！）
     // ==========================================
     const PROJECT_NAME = "my-first-project-bjosg";
     const API_KEY = "rf_sRyNyDbysrbVYyp2FNCslDCxdpN2";
-    let MODEL_VERSION = 41; // 最新のRF-DETRモデル
+    let MODEL_VERSION = 40; // 現在の最新バージョン
     // ==========================================
 
     const STORAGE_KEY = 'timber_doubsta_data';
@@ -332,8 +334,8 @@
 
     async function detectFrame() {
         if(!isAILunning || (isFrozen && !isAccumulating)) return; 
-        
         if(video.readyState === 4 && logModel) {
+            
             const predictions = await logModel.detect(video);
             
             const rect = video.getBoundingClientRect();
@@ -345,50 +347,27 @@
             if (!isAccumulating) {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 currentBoxes = []; 
-            }
-
-            predictions.forEach(p => {
-                let cx, cy, w, h;
-                
-                // ★ どんなデータ構造で返ってきても対応する最強の座標パース処理
-                if (p.bbox) {
-                    if (Array.isArray(p.bbox)) {
-                        cx = p.bbox[0]; cy = p.bbox[1]; w = p.bbox[2]; h = p.bbox[3];
-                    } else {
-                        cx = p.bbox.x; cy = p.bbox.y; w = p.bbox.width; h = p.bbox.height;
-                    }
-                } else {
-                    cx = p.x; cy = p.y; w = p.width; h = p.height;
-                }
-
-                // ★ RF-DETR 正規化(0.0〜1.0)対策: 値が2.0以下なら「割合」と判定し、動画サイズを掛ける
-                if (w <= 2.0 && h <= 2.0) {
-                    cx *= video.videoWidth;
-                    cy *= video.videoHeight;
-                    w *= video.videoWidth;
-                    h *= video.videoHeight;
-                }
-
-                const boxW = w * scaleX;
-                const boxH = h * scaleY;
-                const boxX = (cx * scaleX) - (boxW / 2);
-                const boxY = (cy * scaleY) - (boxH / 2);
-                
-                if (!isAccumulating) {
-                    const text = `${p.class || 'log'} ${Math.round((p.confidence||1) * 100)}%`;
+                predictions.forEach(p => {
+                    const w = p.bbox.width * scaleX;
+                    const h = p.bbox.height * scaleY;
+                    const x = (p.bbox.x * scaleX) - (w / 2);
+                    const y = (p.bbox.y * scaleY) - (h / 2);
+                    const text = `${p.class} ${Math.round(p.confidence * 100)}%`;
                     const textWidth = ctx.measureText(text).width;
-                    const boxInfo = { x: boxX, y: boxY, w: boxW, h: boxH, text, textWidth };
-                    
+                    const boxInfo = { x, y, w, h, text, textWidth };
                     currentBoxes.push(boxInfo);
                     drawBox(boxInfo, '#9932CC'); 
-                } else {
-                    const text = `${p.class || 'log'}`;
+                });
+            } else {
+                predictions.forEach(p => {
+                    const w = p.bbox.width * scaleX;
+                    const h = p.bbox.height * scaleY;
+                    const x = (p.bbox.x * scaleX) - (w / 2);
+                    const y = (p.bbox.y * scaleY) - (h / 2);
+                    const text = `${p.class}`;
                     const textWidth = ctx.measureText(text).width;
-                    accumulatedBoxes.push({ x: boxX, y: boxY, w: boxW, h: boxH, text, textWidth });
-                }
-            });
-
-            if (isAccumulating) {
+                    accumulatedBoxes.push({ x, y, w, h, text, textWidth });
+                });
                 accumulateCount++;
                 if (accumulateCount >= MAX_ACCUMULATE) {
                     isAccumulating = false;
@@ -416,7 +395,6 @@
         const clickX = e.clientX - rect.left;
         const clickY = e.clientY - rect.top;
         let clickedBox = null;
-        
         for (let i = currentBoxes.length - 1; i >= 0; i--) {
             let box = currentBoxes[i];
             if (clickX >= box.x && clickX <= box.x + box.w && clickY >= box.y && clickY <= box.y + box.h) {
