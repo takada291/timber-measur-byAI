@@ -34,6 +34,7 @@
         .btn-blue { background: #1565c0; }
         .btn-green { background: #2e7d32; }
         .btn-purple { background: #673ab7; }
+        .btn-teal { background: #00897b; } /* 新設ボタン用カラー */
 
         .photo-buttons { display: flex; gap: 10px; margin-bottom: 10px; }
         .photo-buttons label { flex: 1; margin-bottom: 0; }
@@ -69,7 +70,7 @@
 
 <div class="card">
     <div class="header-area">
-        <h2>AI検知 Ver 6.0<span style="font-size:0.7em; color:#757575;"> (ハイブリッド版)</span></h2>
+        <h2>AI検知 Ver 6.1<span style="font-size:0.7em; color:#757575;"> (ハイブリッド版)</span></h2>
         <button class="settings-btn" onclick="openSettings()">⚙️ 設定</button>
     </div>
 
@@ -103,6 +104,8 @@
     <!-- ローカル検知（オフライン） -->
     <div class="control-group" style="background: #e8f5e9; border-color: #81c784;">
         <label class="control-label" style="color: #2e7d32;">🧠 Roboflowで検知（オフライン高速）</label>
+        <!-- ★ 追加：モデル事前読み込みボタン -->
+        <button class="btn btn-teal" id="btnLoadModel" onclick="loadRoboflowModel()" style="margin-bottom: 10px;">📥 認識モデル読込（要オンライン環境）</button>
         <button class="btn btn-green" id="btnRunRoboflow" onclick="runRoboflowDetection()">⚡ Roboflowで一括検知</button>
     </div>
     
@@ -389,6 +392,30 @@
     // ==========================================
     // Roboflowでのオフライン検知
     // ==========================================
+    
+    // ★ 追加：モデル事前読み込み機能
+    async function loadRoboflowModel() {
+        const btn = document.getElementById('btnLoadModel');
+        btn.disabled = true;
+        btn.innerText = "⏳ モデル読込中...";
+        statusText.innerText = "Roboflowモデルをダウンロードしています...";
+        
+        try {
+            const rf = await window.roboflow.auth({ publishable_key: API_KEY });
+            logModel = await rf.load({ model: PROJECT_NAME, version: MODEL_VERSION });
+            
+            btn.innerText = "✅ モデル読込完了";
+            btn.style.background = "#388e3c"; // 完了したら緑色に
+            statusText.innerText = "モデルの準備が完了しました。オフラインでも検知可能です。";
+            statusText.style.color = "#2e7d32";
+        } catch (error) {
+            alert("モデル読込失敗: " + error.message);
+            statusText.innerText = "エラーが発生しました";
+            btn.disabled = false;
+            btn.innerText = "📥 認識モデル読込（要オンライン環境）";
+        }
+    }
+
     async function runRoboflowDetection() {
         if (!originalImage) return alert("先に写真を読み込んでください");
         const btn = document.getElementById('btnRunRoboflow');
@@ -402,6 +429,8 @@
             if(!logModel) {
                 const rf = await window.roboflow.auth({ publishable_key: API_KEY });
                 logModel = await rf.load({ model: PROJECT_NAME, version: MODEL_VERSION });
+                document.getElementById('btnLoadModel').innerText = "✅ モデル読込完了";
+                document.getElementById('btnLoadModel').style.background = "#388e3c";
             }
 
             // canvasを直接渡して推論実行
