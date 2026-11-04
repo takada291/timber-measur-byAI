@@ -34,7 +34,7 @@
         .btn-blue { background: #1565c0; }
         .btn-green { background: #2e7d32; }
         .btn-purple { background: #673ab7; }
-        .btn-teal { background: #00897b; } /* 新設ボタン用カラー */
+        .btn-teal { background: #00897b; } 
 
         .photo-buttons { display: flex; gap: 10px; margin-bottom: 10px; }
         .photo-buttons label { flex: 1; margin-bottom: 0; }
@@ -70,7 +70,7 @@
 
 <div class="card">
     <div class="header-area">
-        <h2>AI検知 Ver 6.1<span style="font-size:0.7em; color:#757575;"> (ハイブリッド版)</span></h2>
+        <h2>AI検知 Ver 6.2<span style="font-size:0.7em; color:#757575;"> (ハイブリッド版)</span></h2>
         <button class="settings-btn" onclick="openSettings()">⚙️ 設定</button>
     </div>
 
@@ -104,7 +104,6 @@
     <!-- ローカル検知（オフライン） -->
     <div class="control-group" style="background: #e8f5e9; border-color: #81c784;">
         <label class="control-label" style="color: #2e7d32;">🧠 Roboflowで検知（オフライン高速）</label>
-        <!-- ★ 追加：モデル事前読み込みボタン -->
         <button class="btn btn-teal" id="btnLoadModel" onclick="loadRoboflowModel()" style="margin-bottom: 10px;">📥 認識モデル読込（要オンライン環境）</button>
         <button class="btn btn-green" id="btnRunRoboflow" onclick="runRoboflowDetection()">⚡ Roboflowで一括検知</button>
     </div>
@@ -190,9 +189,8 @@
     // ==========================================
     const PROJECT_NAME = "my-first-project-bjosg";
     const API_KEY = "rf_sRyNyDbysrbVYyp2FNCslDCxdpN2";
-    let MODEL_VERSION = 40; // Roboflow 3.0安定版
+    let MODEL_VERSION = 40; 
     
-    // ★ 厳格指定のGeminiモデルバージョン
     const MODEL_CANDIDATES = ["gemini-3.6-flash", "gemini-2.5-flash"];
     // ==========================================
 
@@ -206,8 +204,8 @@
     const statusText = document.getElementById('status-text');
     const calibArea = document.getElementById('calibration-area');
     
-    let originalImage = null; // 読み込んだ元画像
-    let logModel = null; // Roboflowモデル
+    let originalImage = null; 
+    let logModel = null; 
     let currentBoxes = []; 
     let isCalculated = false; 
     let selectedBoxForCalc = null;
@@ -225,7 +223,6 @@
         }
         initDiameterDropdown();
         
-        // Gemini APIキーの復元
         const savedKey = localStorage.getItem('gemini_api_key_ai');
         if (savedKey) document.getElementById('geminiApiKey').value = savedKey;
     };
@@ -246,11 +243,20 @@
     function handleImageUpload(e) {
         const file = e.target.files[0];
         if (!file) return;
+
+        // ★ 追加：明細データのリセット確認
+        const list = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        if (list.length > 0) {
+            if (confirm("明細データをリセットしますがよろしいですか？\n（キャンセルすると前回のデータに追加されます）")) {
+                localStorage.removeItem(STORAGE_KEY);
+                renderTable();
+            }
+        }
+
         const reader = new FileReader();
         reader.onload = function(event) {
             const img = new Image();
             img.onload = function() {
-                // 画像をリサイズしてキャンバスに描画
                 const maxWidth = 1280;
                 let width = img.width;
                 let height = img.height;
@@ -263,19 +269,21 @@
                 ctx.drawImage(img, 0, 0, width, height);
                 originalImage = ctx.getImageData(0, 0, width, height);
                 
-                resetDetection(); // 状態を初期化
+                resetDetection(); 
                 statusText.innerText = "2. Gemini または Roboflow で検知を実行してください";
                 statusText.style.color = "#1565c0";
             }
             img.src = event.target.result;
         }
         reader.readAsDataURL(file);
+        
+        // 連続して同じファイルを選択できるようにvalueをリセット
+        e.target.value = '';
     }
     
     document.getElementById('imageInputCamera').addEventListener('change', handleImageUpload);
     document.getElementById('imageInputFile').addEventListener('change', handleImageUpload);
 
-    // キャンバスを元のクリーンな画像に戻す
     function restoreCleanImage() {
         if(originalImage) ctx.putImageData(originalImage, 0, 0);
     }
@@ -306,7 +314,7 @@
         btn.innerText = "⏳ Geminiで解析中...";
         statusText.innerText = "Geminiに画像を送信しています...";
         
-        resetDetection(); // 画面リセット
+        resetDetection(); 
 
         try {
             const base64Image = canvas.toDataURL("image/jpeg", 0.8).split(',')[1];
@@ -361,7 +369,6 @@
                 throw new Error("AIから正しいデータが返ってきませんでした。エラー: " + lastError);
             }
 
-            // Geminiの割合座標をピクセル座標（x,y,w,h）に変換して登録
             const w = canvas.width;
             const h = canvas.height;
             currentBoxes = jsonResponse.logs.map(log => {
@@ -392,8 +399,6 @@
     // ==========================================
     // Roboflowでのオフライン検知
     // ==========================================
-    
-    // ★ 追加：モデル事前読み込み機能
     async function loadRoboflowModel() {
         const btn = document.getElementById('btnLoadModel');
         btn.disabled = true;
@@ -405,7 +410,7 @@
             logModel = await rf.load({ model: PROJECT_NAME, version: MODEL_VERSION });
             
             btn.innerText = "✅ モデル読込完了";
-            btn.style.background = "#388e3c"; // 完了したら緑色に
+            btn.style.background = "#388e3c"; 
             statusText.innerText = "モデルの準備が完了しました。オフラインでも検知可能です。";
             statusText.style.color = "#2e7d32";
         } catch (error) {
@@ -423,7 +428,7 @@
         btn.innerText = "⏳ 読込・解析中...";
         statusText.innerText = "Roboflowでローカル解析しています...";
         
-        resetDetection(); // 画面リセット
+        resetDetection(); 
 
         try {
             if(!logModel) {
@@ -433,10 +438,8 @@
                 document.getElementById('btnLoadModel').style.background = "#388e3c";
             }
 
-            // canvasを直接渡して推論実行
             const predictions = await logModel.detect(canvas);
             
-            // Roboflowのbbox(中心x,y)から左上(x,y)に変換して登録
             currentBoxes = predictions.map(p => {
                 const boxW = p.bbox.width;
                 const boxH = p.bbox.height;
@@ -496,7 +499,7 @@
         if (clickedBox) {
             restoreCleanImage();
             currentBoxes.forEach(b => drawBox(b, '#9932CC'));
-            drawBox(clickedBox, '#e65100'); // 選んだ枠をオレンジに
+            drawBox(clickedBox, '#e65100'); 
             setTimeout(() => openDiaModal(clickedBox), 50);
         }
     });
@@ -536,7 +539,7 @@
         
         const list = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
         
-        restoreCleanImage(); // ボックスを消してクリーンな画像にする
+        restoreCleanImage(); 
 
         currentBoxes.forEach(box => {
             let estDia = Math.max(1, Math.round(box.w / pxPerCm));
@@ -548,7 +551,7 @@
             
             const cx = box.x + box.w / 2;
             const cy = box.y + box.h / 2;
-            drawDotAndText(cx, cy, estDia, '#39ff14'); // 緑のドットと数値を描画
+            drawDotAndText(cx, cy, estDia, '#39ff14'); 
         });
 
         localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
@@ -596,12 +599,20 @@
         offCanvas.height = canvas.height;
         const offCtx = offCanvas.getContext('2d');
 
-        // mainCanvasにはすでに写真と緑のドットが描かれている
         offCtx.drawImage(canvas, 0, 0);
 
         const timeStr = new Date().toLocaleString('ja-JP');
-        const countStr = count || 0;
-        const volStr = volume ? volume.toFixed(3) : "0.000";
+        
+        // ★修正：全体の累計本数と材積を計算して描画
+        const list = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        let totalCount = 0;
+        let totalVolume = 0;
+        list.forEach(item => {
+            totalCount++;
+            totalVolume += item.volume;
+        });
+
+        const volStr = totalVolume.toFixed(3);
 
         offCtx.fillStyle = "rgba(0,0,0,0.6)";
         offCtx.fillRect(10, offCanvas.height - 105, 400, 95);
@@ -614,13 +625,13 @@
         } else {
             offCtx.fillText(`位置情報: 取得できませんでした`, 20, offCanvas.height - 55);
         }
-        offCtx.fillText(`検知結果: ${countStr}本 / 材積合計: ${volStr} m3`, 20, offCanvas.height - 30);
+        offCtx.fillText(`検知結果: ${totalCount}本 / 材積合計: ${volStr} m3`, 20, offCanvas.height - 30);
 
         previewDataUrl = offCanvas.toDataURL('image/jpeg', 0.9);
         document.getElementById('previewImg').src = previewDataUrl;
         document.getElementById('savePreviewModal').style.display = 'block';
         
-        statusText.innerText = `✅ ${countStr}本を保存しました！`;
+        statusText.innerText = `✅ ${count}本を保存しました！`;
     }
 
     function closeSaveModal() {
