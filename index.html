@@ -59,19 +59,19 @@
         table { width: 100%; border-collapse: collapse; font-size: 12px; }
         th, td { border: 1px solid #d7ccc8; padding: 8px 4px; text-align: center; }
         th { background: #efebe9; }
-        .btn-del { background: #d32f2f; color: white; border: none; padding: 4px 8px; border-radius: 4px; }
-        .export-btn { width: 100%; background: #388e3c; color: white; padding: 12px; border: none; border-radius: 6px; margin-top: 10px; font-size: 1rem; font-weight: bold; }
+        .btn-del { background: #d32f2f; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; }
+        .export-btn { width: 100%; background: #388e3c; color: white; padding: 12px; border: none; border-radius: 6px; margin-top: 10px; font-size: 1rem; font-weight: bold; cursor: pointer; }
 
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 99; }
-        .modal-content { background: white; margin: 5% auto; padding: 20px; width: 90%; max-width: 400px; border-radius: 12px; text-align: center; }
-        .close-btn { background: #666; color: white; width: 100%; padding: 10px; border: none; border-radius: 6px; margin-top: 15px; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.55); z-index: 99; }
+        .modal-content { background: white; margin: 12% auto; padding: 20px; width: 90%; max-width: 400px; border-radius: 12px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        .close-btn { background: #666; color: white; width: 100%; padding: 10px; border: none; border-radius: 6px; margin-top: 15px; cursor: pointer; }
     </style>
 </head>
 <body>
 
 <div class="card">
     <div class="header-area">
-        <h2>AI検知 Ver 6.3<span style="font-size:0.7em; color:#757575;"> (Gemini 4対応版)</span></h2>
+        <h2>AI検知 Ver 6.4<span style="font-size:0.7em; color:#757575;"> (Gemini 4対応版)</span></h2>
         <button class="settings-btn" onclick="openSettings()">⚙️ 設定</button>
     </div>
 
@@ -95,6 +95,12 @@
         <canvas id="mainCanvas"></canvas>
     </div>
 
+    <!-- クイックリセットボタン群（上部に配置していつでも操作可能に） -->
+    <div style="display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 12px;">
+        <button class="settings-btn" style="background:#d32f2f;" onclick="handleAllClear()">🗑️ 過去の材積内訳をリセット</button>
+        <button class="settings-btn" style="background:#6c757d;" onclick="resetDetection()">🔄 枠をクリア</button>
+    </div>
+
     <!-- クラウド検知（オンライン） -->
     <div class="control-group ai-group">
         <label class="control-label" style="color: #4a148c;">🤖 Geminiで検知（オンライン高精度）</label>
@@ -115,10 +121,6 @@
         <label class="control-label" style="color: #2e7d32;">🧠 Roboflowで検知（オフライン高速）</label>
         <button class="btn btn-teal" id="btnLoadModel" onclick="loadRoboflowModel()" style="margin-bottom: 10px;">📥 認識モデル読込（要オンライン環境）</button>
         <button class="btn btn-green" id="btnRunRoboflow" onclick="runRoboflowDetection()" style="margin-bottom: 0;">⚡ Roboflowで一括検知</button>
-    </div>
-    
-    <div style="text-align:right;">
-        <button class="settings-btn" style="background:#6c757d; margin-bottom:10px;" onclick="resetDetection()">🔄 画像リセット</button>
     </div>
 
     <!-- キャリブレーション（検知後に表示） -->
@@ -148,7 +150,22 @@
     </div>
     <button class="export-btn" onclick="handleExport()">CSV出力</button>
     <div style="text-align:right; margin-top:10px;">
-        <button class="btn-del" style="background:#666;" onclick="handleAllClear()">全消去</button>
+        <button class="btn-del" style="background:#666; padding: 6px 12px;" onclick="handleAllClear()">全消去（材積内訳リセット）</button>
+    </div>
+</div>
+
+<!-- ★ 新設：過去の材積内訳リセット確認モーダル（はい / いいえ） -->
+<div id="resetConfirmModal" class="modal">
+    <div class="modal-content">
+        <h3 style="margin-top:0; color:#d32f2f;">⚠️ 材積内訳のリセット確認</h3>
+        <p style="font-size:0.95em; margin-bottom:20px; line-height:1.5;">
+            過去の材積内訳（明細データ <span id="existingDataCount" style="font-weight:bold; color:#d32f2f;">0</span> 本）が残っています。<br>
+            <b>リセットしてよろしいですか？</b>
+        </p>
+        <div style="display:flex; gap:10px;">
+            <button id="btnResetYes" class="btn-green" style="flex:1; padding:12px; font-size:1rem; border:none; border-radius:6px; color:white; font-weight:bold; cursor:pointer;" onclick="resolveResetModal(true)">はい (リセット)</button>
+            <button id="btnResetNo" class="btn-del" style="flex:1; padding:12px; font-size:1rem; background:#757575;" onclick="resolveResetModal(false)">いいえ (合算)</button>
+        </div>
     </div>
 </div>
 
@@ -174,20 +191,20 @@
         </div>
         <div style="display:flex; gap:10px; margin-top:15px;">
             <button class="btn-del" style="flex:1; padding:12px; font-size:1rem;" onclick="closeDiaModal()">キャンセル</button>
-            <button class="btn-green" style="flex:1; padding:12px; font-size:1rem; margin-bottom:0;" onclick="confirmDiameter()">決定</button>
+            <button class="btn-green" style="flex:1; padding:12px; font-size:1rem; margin-bottom:0; border:none; border-radius:6px; color:white; font-weight:bold; cursor:pointer;" onclick="confirmDiameter()">決定</button>
         </div>
     </div>
 </div>
 
 <!-- 保存プレビューモーダル -->
 <div id="savePreviewModal" class="modal">
-    <div class="modal-content">
+    <div class="modal-content" style="margin: 5% auto;">
         <h3 style="margin-top:0; color:#1565c0;">📸 保存プレビュー</h3>
         <p style="font-size:0.8em; color:#666;">撮影日時・GPS・検知結果付き</p>
         <img id="previewImg" style="width:100%; border-radius:8px; border:2px solid #ccc; margin-bottom:10px;">
         <div style="display:flex; gap:10px; margin-top:10px;">
             <button class="btn-del" style="flex:1; padding:10px; background:#666;" onclick="closeSaveModal()">閉じる</button>
-            <button class="btn-orange" style="flex:1; padding:10px; margin-bottom:0; background:#e65100; color:white; border:none; border-radius:6px; font-weight:bold;" onclick="downloadImage()">💾 共有 / 保存</button>
+            <button class="btn-orange" style="flex:1; padding:10px; margin-bottom:0; background:#e65100; color:white; border:none; border-radius:6px; font-weight:bold; cursor:pointer;" onclick="downloadImage()">💾 共有 / 保存</button>
         </div>
     </div>
 </div>
@@ -219,6 +236,7 @@
     let isCalculated = false; 
     let selectedBoxForCalc = null;
     let previewDataUrl = null; 
+    let resetModalCallback = null;
 
     window.onload = function() {
         if ('serviceWorker' in navigator) {
@@ -247,25 +265,47 @@
     }
 
     // ==========================================
+    // ★ 専用リセット確認モーダル制御（はいがデフォルト）
+    // ==========================================
+    function askResetIfNeeded() {
+        return new Promise((resolve) => {
+            const list = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+            if (list.length === 0) {
+                resolve(false);
+                return;
+            }
+            document.getElementById('existingDataCount').innerText = list.length;
+            const modal = document.getElementById('resetConfirmModal');
+            modal.style.display = 'block';
+            document.getElementById('btnResetYes').focus();
+            resetModalCallback = resolve;
+        });
+    }
+
+    function resolveResetModal(shouldReset) {
+        document.getElementById('resetConfirmModal').style.display = 'none';
+        if (shouldReset) {
+            localStorage.removeItem(STORAGE_KEY);
+            renderTable();
+        }
+        if (resetModalCallback) {
+            const cb = resetModalCallback;
+            resetModalCallback = null;
+            cb(shouldReset);
+        }
+    }
+
+    // ==========================================
     // 画像読み込み処理
     // ==========================================
     function handleImageUpload(e) {
         const file = e.target.files[0];
         if (!file) return;
 
-        // 明細データのリセット確認
-        const list = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-        if (list.length > 0) {
-            if (confirm("明細データをリセットしますがよろしいですか？\n（キャンセルすると前回のデータに追加されます）")) {
-                localStorage.removeItem(STORAGE_KEY);
-                renderTable();
-            }
-        }
-
         const reader = new FileReader();
         reader.onload = function(event) {
             const img = new Image();
-            img.onload = function() {
+            img.onload = async function() {
                 const maxWidth = 1280;
                 let width = img.width;
                 let height = img.height;
@@ -281,6 +321,9 @@
                 resetDetection(); 
                 statusText.innerText = "2. Gemini または Roboflow で検知を実行してください";
                 statusText.style.color = "#1565c0";
+
+                // 写真読み込み完了時に過去の材積内訳があれば必ず確認モーダルを表示
+                await askResetIfNeeded();
             }
             img.src = event.target.result;
         }
@@ -308,9 +351,9 @@
     }
 
     // ==========================================
-    // Gemini API 呼び出し共通基盤
+    // Gemini API 呼び出し共通基盤（タイムアウト120秒）
     // ==========================================
-    async function fetchWithTimeout(url, options, timeoutMs = 60000) {
+    async function fetchWithTimeout(url, options, timeoutMs = 120000) {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), timeoutMs);
         try {
@@ -338,14 +381,14 @@
                 let response = await fetchWithTimeout(
                     `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
                     { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payloadWithThinking) },
-                    60000
+                    120000
                 );
                 let data = await response.json();
                 if (data.error && response.status === 400 && supportsThinking) {
                     response = await fetchWithTimeout(
                         `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
                         { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(basePayload) },
-                        60000
+                        120000
                     );
                     data = await response.json();
                 }
@@ -361,7 +404,7 @@
                     }
                 }
             } catch (err) {
-                lastErrorMsg = `[${modelName}] ${err.name === 'AbortError' ? 'タイムアウト(60秒超過)' : err.message}`;
+                lastErrorMsg = `[${modelName}] ${err.name === 'AbortError' ? 'タイムアウト(120秒超過)' : err.message}`;
             }
         }
         throw new Error(lastErrorMsg || "AIモデルでの通信に失敗しました。APIキーをご確認ください。");
@@ -376,6 +419,9 @@
         if (!apiKey) return alert("Gemini APIキーを入力してください");
         
         localStorage.setItem('gemini_api_key_ai', apiKey);
+
+        // 同じ写真で再検知する場合も、過去データがあればリセット確認を表示
+        await askResetIfNeeded();
         
         const btn = document.getElementById('btnRunGemini');
         btn.disabled = true;
@@ -469,6 +515,9 @@
 
     async function runRoboflowDetection() {
         if (!originalImage) return alert("先に写真を読み込んでください");
+
+        await askResetIfNeeded();
+
         const btn = document.getElementById('btnRunRoboflow');
         btn.disabled = true;
         btn.innerText = "⏳ 読込・解析中...";
@@ -676,7 +725,7 @@
         document.getElementById('previewImg').src = previewDataUrl;
         document.getElementById('savePreviewModal').style.display = 'block';
         
-        statusText.innerText = `✅ ${count}本を保存しました！`;
+        statusText.innerText = `✅ ${count}本を保存しました！（累計: ${totalCount}本 / ${volStr}m3）`;
     }
 
     function closeSaveModal() {
@@ -736,9 +785,19 @@
         renderTable();
     }
     function handleAllClear() {
-        if(!confirm("全データを消去しますか？")) return;
-        localStorage.removeItem(STORAGE_KEY);
-        renderTable();
+        const list = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        if (list.length === 0) {
+            alert("現在保存されている材積内訳データはありません。");
+            return;
+        }
+        document.getElementById('existingDataCount').innerText = list.length;
+        document.getElementById('resetConfirmModal').style.display = 'block';
+        resetModalCallback = (shouldReset) => {
+            if (shouldReset) {
+                statusText.innerText = "🗑️ 過去の材積内訳データをリセットしました。";
+                statusText.style.color = "#d32f2f";
+            }
+        };
     }
     function openSettings() {
         for(let i=1; i<=5; i++){ document.getElementById(`customTree${i}`).value = currentSettings.customTrees[i-1] || ""; }
