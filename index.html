@@ -71,7 +71,7 @@
 
 <div class="card">
     <div class="header-area">
-        <h2>AI検知 Ver 6.4<span style="font-size:0.7em; color:#757575;"> (Gemini 4対応版)</span></h2>
+        <h2>AI検知 Ver 6.5<span style="font-size:0.7em; color:#757575;"> (上限解除＆Gemini4版)</span></h2>
         <button class="settings-btn" onclick="openSettings()">⚙️ 設定</button>
     </div>
 
@@ -95,7 +95,7 @@
         <canvas id="mainCanvas"></canvas>
     </div>
 
-    <!-- クイックリセットボタン群（上部に配置していつでも操作可能に） -->
+    <!-- クイックリセットボタン群 -->
     <div style="display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 12px;">
         <button class="settings-btn" style="background:#d32f2f;" onclick="handleAllClear()">🗑️ 過去の材積内訳をリセット</button>
         <button class="settings-btn" style="background:#6c757d;" onclick="resetDetection()">🔄 枠をクリア</button>
@@ -116,10 +116,18 @@
         <button class="btn btn-purple" id="btnRunGemini" onclick="runGeminiDetection()" style="margin-bottom: 0;">✨ Geminiで一括検知</button>
     </div>
 
-    <!-- ローカル検知（オフライン） -->
+    <!-- ローカル検知（オフライン・上限200本解除） -->
     <div class="control-group" style="background: #e8f5e9; border-color: #81c784;">
-        <label class="control-label" style="color: #2e7d32;">🧠 Roboflowで検知（オフライン高速）</label>
+        <label class="control-label" style="color: #2e7d32;">🧠 Roboflowで検知（オフライン高速・最大200本）</label>
         <button class="btn btn-teal" id="btnLoadModel" onclick="loadRoboflowModel()" style="margin-bottom: 10px;">📥 認識モデル読込（要オンライン環境）</button>
+        <div class="input-row" style="margin-bottom: 10px;">
+            <label style="color: #2e7d32;">🎯 検出感度</label>
+            <select id="rfThresholdSelect" style="padding: 8px; font-size: 0.95rem; border-color: #81c784;">
+                <option value="0.25">甘め・多めに検出 (25%以上)</option>
+                <option value="0.40" selected>標準バランス (40%以上)</option>
+                <option value="0.60">厳しめ・確実のみ (60%以上)</option>
+            </select>
+        </div>
         <button class="btn btn-green" id="btnRunRoboflow" onclick="runRoboflowDetection()" style="margin-bottom: 0;">⚡ Roboflowで一括検知</button>
     </div>
 
@@ -154,7 +162,7 @@
     </div>
 </div>
 
-<!-- ★ 新設：過去の材積内訳リセット確認モーダル（はい / いいえ） -->
+<!-- 過去の材積内訳リセット確認モーダル（はい / いいえ） -->
 <div id="resetConfirmModal" class="modal">
     <div class="modal-content">
         <h3 style="margin-top:0; color:#d32f2f;">⚠️ 材積内訳のリセット確認</h3>
@@ -265,7 +273,7 @@
     }
 
     // ==========================================
-    // ★ 専用リセット確認モーダル制御（はいがデフォルト）
+    // 専用リセット確認モーダル制御（はいがデフォルト）
     // ==========================================
     function askResetIfNeeded() {
         return new Promise((resolve) => {
@@ -322,7 +330,6 @@
                 statusText.innerText = "2. Gemini または Roboflow で検知を実行してください";
                 statusText.style.color = "#1565c0";
 
-                // 写真読み込み完了時に過去の材積内訳があれば必ず確認モーダルを表示
                 await askResetIfNeeded();
             }
             img.src = event.target.result;
@@ -420,7 +427,6 @@
         
         localStorage.setItem('gemini_api_key_ai', apiKey);
 
-        // 同じ写真で再検知する場合も、過去データがあればリセット確認を表示
         await askResetIfNeeded();
         
         const btn = document.getElementById('btnRunGemini');
@@ -489,8 +495,22 @@
     }
 
     // ==========================================
-    // Roboflowでのオフライン検知
+    // ★ Roboflowでのオフライン検知（20本上限リミッター解除）
     // ==========================================
+    function applyRoboflowConfig() {
+        if (!logModel) return;
+        const selectedThreshold = parseFloat(document.getElementById('rfThresholdSelect')?.value) || 0.40;
+        try {
+            logModel.configure({
+                threshold: selectedThreshold,
+                overlap: 0.50,
+                max_objects: 200
+            });
+        } catch (e) {
+            console.log("Roboflow configure warning:", e);
+        }
+    }
+
     async function loadRoboflowModel() {
         const btn = document.getElementById('btnLoadModel');
         btn.disabled = true;
@@ -500,10 +520,11 @@
         try {
             const rf = await window.roboflow.auth({ publishable_key: API_KEY });
             logModel = await rf.load({ model: PROJECT_NAME, version: MODEL_VERSION });
+            applyRoboflowConfig();
             
-            btn.innerText = "✅ モデル読込完了";
+            btn.innerText = "✅ モデル読込完了 (上限200本)";
             btn.style.background = "#388e3c"; 
-            statusText.innerText = "モデルの準備が完了しました。オフラインでも検知可能です。";
+            statusText.innerText = "モデルの準備が完了しました。オフラインでも最大200本まで検知可能です。";
             statusText.style.color = "#2e7d32";
         } catch (error) {
             alert("モデル読込失敗: " + error.message);
@@ -529,9 +550,14 @@
             if(!logModel) {
                 const rf = await window.roboflow.auth({ publishable_key: API_KEY });
                 logModel = await rf.load({ model: PROJECT_NAME, version: MODEL_VERSION });
-                document.getElementById('btnLoadModel').innerText = "✅ モデル読込完了";
-                document.getElementById('btnLoadModel').style.background = "#388e3c";
+                const loadBtn = document.getElementById('btnLoadModel');
+                loadBtn.innerText = "✅ モデル読込完了 (上限200本)";
+                loadBtn.style.background = "#388e3c";
+                loadBtn.disabled = true;
             }
+
+            // 推論直前にリミッター解除（max_objects: 200）と選択された感度を適用
+            applyRoboflowConfig();
 
             const predictions = await logModel.detect(canvas);
             
