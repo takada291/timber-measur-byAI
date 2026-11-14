@@ -13,7 +13,46 @@
     <meta name="apple-mobile-web-app-title" content="AI検知">
     <link rel="apple-touch-icon" href="icon-512.png">
 
-    <script src="https://cdn.roboflow.com/0.2.26/roboflow.js"></script>
+    <!-- ★ リポジトリ内の roboflow.js を直接読み込む前に、モデル通信先をローカルへ振り替えるフックを設定 -->
+    <script>
+      (function() {
+        function rewriteModelUrl(url) {
+          if (typeof url !== 'string') return url;
+          // モデル構造データの通信をローカルの model.json へ振り替え
+          if (url.includes('my-first-project-bjosg/40') || url.includes('model.json')) {
+            return './model.json';
+          }
+          // 重みファイル(.bin)の通信をローカルの .bin へ振り替え
+          const binMatch = url.match(/group1-shard\d+of\d+\.bin/);
+          if (binMatch) {
+            return './' + binMatch[0];
+          }
+          return url;
+        }
+
+        // fetch の振り替え
+        const originalFetch = window.fetch;
+        window.fetch = function(input, init) {
+          if (typeof input === 'string') {
+            input = rewriteModelUrl(input);
+          } else if (input && typeof input.url === 'string') {
+            const newUrl = rewriteModelUrl(input.url);
+            if (newUrl !== input.url) {
+              input = new Request(newUrl, input);
+            }
+          }
+          return originalFetch.call(this, input, init);
+        };
+
+        // XMLHttpRequest の振り替え
+        const originalOpen = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+          const newUrl = rewriteModelUrl(url);
+          return originalOpen.call(this, method, newUrl, ...rest);
+        };
+      })();
+    </script>
+    <script src="./roboflow.js"></script>
 
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-WXBP6CPKLP"></script>
     <script>
@@ -71,7 +110,7 @@
 
 <div class="card">
     <div class="header-area">
-        <h2>AI検知 Ver 6.6<span style="font-size:0.7em; color:#757575;"> (Gemini4＆ロボフロー上限500本版)</span></h2>
+        <h2>AI検知 Ver 6.7<span style="font-size:0.7em; color:#757575;"> (モデル内蔵＆上限500本版)</span></h2>
         <button class="settings-btn" onclick="openSettings()">⚙️ 設定</button>
     </div>
 
@@ -116,10 +155,10 @@
         <button class="btn btn-purple" id="btnRunGemini" onclick="runGeminiDetection()" style="margin-bottom: 0;">✨ Geminiで一括検知</button>
     </div>
 
-    <!-- ローカル検知（オフライン・上限500本解除） -->
+    <!-- ローカル検知（リポジトリ内蔵モデル・上限500本） -->
     <div class="control-group" style="background: #e8f5e9; border-color: #81c784;">
-        <label class="control-label" style="color: #2e7d32;">🧠 Roboflowで検知（オフライン高速・最大500本）</label>
-        <button class="btn btn-teal" id="btnLoadModel" onclick="loadRoboflowModel()" style="margin-bottom: 10px;">📥 認識モデル読込（要オンライン環境）</button>
+        <label class="control-label" style="color: #2e7d32;">🧠 Roboflow内蔵モデルで検知（高速・最大500本）</label>
+        <button class="btn btn-teal" id="btnLoadModel" onclick="loadRoboflowModel()" style="margin-bottom: 10px;">📥 内蔵モデル読込（事前キャッシュ用）</button>
         <div class="input-row" style="margin-bottom: 10px;">
             <label style="color: #2e7d32;">🎯 検出感度</label>
             <select id="rfThresholdSelect" style="padding: 8px; font-size: 0.95rem; border-color: #81c784;">
@@ -495,7 +534,7 @@
     }
 
     // ==========================================
-    // ★ Roboflowでのオフライン検知（20本上限リミッター解除）
+    // ★ Roboflow 内蔵モデルでの検知（上限500本）
     // ==========================================
     function applyRoboflowConfig() {
         if (!logModel) return;
@@ -514,23 +553,23 @@
     async function loadRoboflowModel() {
         const btn = document.getElementById('btnLoadModel');
         btn.disabled = true;
-        btn.innerText = "⏳ モデル読込中...";
-        statusText.innerText = "Roboflowモデルをダウンロードしています...";
+        btn.innerText = "⏳ 内蔵モデル読込中...";
+        statusText.innerText = "リポジトリ内の認識モデルを読み込んでいます...";
         
         try {
             const rf = await window.roboflow.auth({ publishable_key: API_KEY });
             logModel = await rf.load({ model: PROJECT_NAME, version: MODEL_VERSION });
             applyRoboflowConfig();
             
-            btn.innerText = "✅ モデル読込完了 (上限500本)";
+            btn.innerText = "✅ 内蔵モデル読込完了 (上限500本)";
             btn.style.background = "#388e3c"; 
-            statusText.innerText = "モデルの準備が完了しました。オフラインでも最大500本まで検知可能です。";
+            statusText.innerText = "内蔵モデルの準備が完了しました。オフラインでも最大500本まで検知可能です。";
             statusText.style.color = "#2e7d32";
         } catch (error) {
             alert("モデル読込失敗: " + error.message);
             statusText.innerText = "エラーが発生しました";
             btn.disabled = false;
-            btn.innerText = "📥 認識モデル読込（要オンライン環境）";
+            btn.innerText = "📥 内蔵モデル読込（事前キャッシュ用）";
         }
     }
 
@@ -542,7 +581,7 @@
         const btn = document.getElementById('btnRunRoboflow');
         btn.disabled = true;
         btn.innerText = "⏳ 読込・解析中...";
-        statusText.innerText = "Roboflowでローカル解析しています...";
+        statusText.innerText = "内蔵モデルでローカル解析しています...";
         
         resetDetection(); 
 
@@ -551,12 +590,11 @@
                 const rf = await window.roboflow.auth({ publishable_key: API_KEY });
                 logModel = await rf.load({ model: PROJECT_NAME, version: MODEL_VERSION });
                 const loadBtn = document.getElementById('btnLoadModel');
-                loadBtn.innerText = "✅ モデル読込完了 (上限500本)";
+                loadBtn.innerText = "✅ 内蔵モデル読込完了 (上限500本)";
                 loadBtn.style.background = "#388e3c";
                 loadBtn.disabled = true;
             }
 
-            // 推論直前にリミッター解除（max_objects: 500）と選択された感度を適用
             applyRoboflowConfig();
 
             const predictions = await logModel.detect(canvas);
