@@ -76,7 +76,15 @@
         .photo-buttons label { flex: 1; margin-bottom: 0; }
 
         #camera-container { position: relative; width: 100%; border-radius: 8px; overflow: hidden; background: #000; display: flex; justify-content: center; align-items: center; min-height: 250px; margin-bottom: 10px;}
-        canvas { max-width: 100%; height: auto; display: block; margin: 0 auto; touch-action: none; cursor: crosshair;}
+        canvas { max-width: 100%; height: auto; display: block; margin: 0 auto; touch-action: manipulation; cursor: crosshair;}
+
+        /* ★ 新設：選択モード・枠消しゴム切り替えツールバー */
+        .toolbar { display: flex; gap: 6px; margin-bottom: 10px; }
+        .tool-btn { flex: 1; padding: 10px 6px; border: 2px solid #ccc; border-radius: 6px; background: #eee; text-align: center; font-weight: bold; font-size: 0.9em; cursor: pointer; user-select: none; }
+        .tool-btn.active-select { background: #f3e5f5; border-color: #673ab7; color: #4a148c; }
+        .tool-btn.active-eraser { background: #ffebee; border-color: #d32f2f; color: #c62828; }
+        .tool-btn.undo-btn { flex: 0.65; background: #fff3e0; border-color: #ffb74d; color: #e65100; }
+        .tool-btn.undo-btn:disabled { opacity: 0.4; cursor: not-allowed; background: #eee; border-color: #ccc; color: #999; }
         
         .control-group { margin-bottom: 15px; background: #fff3e0; padding: 10px; border-radius: 8px; border: 1px solid #ffcc80; }
         .control-group.ai-group { background: #f3e5f5; border-color: #ce93d8; }
@@ -106,7 +114,7 @@
 
 <div class="card">
     <div class="header-area">
-        <h2>AI検知 Ver 6.8<span style="font-size:0.7em; color:#757575;"> (内蔵AI・上限500本版)</span></h2>
+        <h2>AI検知 Ver 6.9<span style="font-size:0.7em; color:#757575;"></span></h2>
         <button class="settings-btn" onclick="openSettings()">⚙️ 設定</button>
     </div>
 
@@ -130,13 +138,20 @@
         <canvas id="mainCanvas"></canvas>
     </div>
 
+    <!-- ★ 新設：基準選択モードと枠消しゴムの切り替えツールバー -->
+    <div class="toolbar">
+        <div class="tool-btn active-select" id="tool-select" onclick="setBoxTapMode('select')">👆 基準枠を選択</div>
+        <div class="tool-btn" id="tool-eraser" onclick="setBoxTapMode('eraser')">⚪️ 枠消しゴム</div>
+        <button class="tool-btn undo-btn" id="btnUndoBox" onclick="undoDeleteBox()" disabled>↩️ 戻す</button>
+    </div>
+
     <!-- クイックリセットボタン群 -->
     <div style="display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 12px;">
         <button class="settings-btn" style="background:#d32f2f;" onclick="handleAllClear()">🗑️ 過去の材積内訳をリセット</button>
-        <button class="settings-btn" style="background:#6c757d;" onclick="resetDetection()">🔄 枠をクリア</button>
+        <button class="settings-btn" style="background:#6c757d;" onclick="resetDetection()">🔄 枠を全クリア</button>
     </div>
 
-    <!-- ★ クラウド検知（機能は温存し、display: none; で画面から非表示） -->
+    <!-- クラウド検知（機能は温存し、display: none; で画面から非表示） -->
     <div class="control-group ai-group" style="display: none;">
         <label class="control-label" style="color: #4a148c;">🤖 Geminiで検知（オンライン高精度）</label>
         <input type="password" id="geminiApiKey" placeholder="Gemini APIキー (初回のみ)">
@@ -276,6 +291,8 @@
     let originalImage = null; 
     let logModel = null; 
     let currentBoxes = []; 
+    let deletedBoxesHistory = []; // ★ 消しゴムで消した枠の履歴（Undo用）
+    let boxTapMode = 'select';    // ★ 'select'（基準選択）または 'eraser'（枠消しゴム）
     let isCalculated = false; 
     let selectedBoxForCalc = null;
     let previewDataUrl = null; 
@@ -305,6 +322,53 @@
         diaSelect.addEventListener('change', (e) => {
             document.getElementById('manualDiaDiv').style.display = e.target.value === 'manual' ? 'block' : 'none';
         });
+    }
+
+    // ==========================================
+    // ★ 基準枠選択 / 枠消しゴム モード切替とUndo処理
+    // ==========================================
+    function setBoxTapMode(mode) {
+        boxTapMode = mode;
+        const btnSelect = document.getElementById('tool-select');
+        const btnEraser = document.getElementById('tool-eraser');
+
+        if (mode === 'eraser') {
+            btnSelect.classList.remove('active-select');
+            btnEraser.classList.add('active-eraser');
+            if (currentBoxes.length > 0 && !isCalculated) {
+                statusText.innerText = `⚪️ 消しゴムモード（残り ${currentBoxes.length} 本）：不要な枠をタップして消去できます`;
+                statusText.style.color = "#d32f2f";
+                document.getElementById('calibMsg').innerHTML = `⚪️ <b>枠消しゴムモード中</b>（現在 <b>${currentBoxes.length} 本</b>）<br>不要な枠をタップして消去したら、「👆 基準枠を選択」に戻してください。`;
+            }
+        } else {
+            btnEraser.classList.remove('active-eraser');
+            btnSelect.classList.add('active-select');
+            if (currentBoxes.length > 0 && !isCalculated) {
+                statusText.innerText = `✅ 現在 ${currentBoxes.length} 本：基準となる丸太の枠をタップしてください`;
+                statusText.style.color = "#2e7d32";
+                document.getElementById('calibMsg').innerHTML = `✅ 丸太を検知しました（<b>${currentBoxes.length} 本</b>）。<br>画面内の基準となる丸太の枠を<b>直接タップ</b>してください。`;
+            }
+        }
+    }
+
+    function undoDeleteBox() {
+        if (deletedBoxesHistory.length === 0 || isCalculated) return;
+        const restored = deletedBoxesHistory.pop();
+        currentBoxes.push(restored);
+        document.getElementById('btnUndoBox').disabled = (deletedBoxesHistory.length === 0);
+
+        restoreCleanImage();
+        currentBoxes.forEach(b => drawBox(b, '#9932CC'));
+
+        if (boxTapMode === 'eraser') {
+            statusText.innerText = `↩️ 1本元に戻しました（残り ${currentBoxes.length} 本）`;
+            statusText.style.color = "#e65100";
+            document.getElementById('calibMsg').innerHTML = `⚪️ <b>枠消しゴムモード中</b>（現在 <b>${currentBoxes.length} 本</b>）<br>不要な枠をタップして消去したら、「👆 基準枠を選択」に戻してください。`;
+        } else {
+            statusText.innerText = `↩️ 1本元に戻しました（現在 ${currentBoxes.length} 本）。基準枠をタップしてください。`;
+            statusText.style.color = "#2e7d32";
+            document.getElementById('calibMsg').innerHTML = `✅ 丸太を検知しました（<b>${currentBoxes.length} 本</b>）。<br>画面内の基準となる丸太の枠を<b>直接タップ</b>してください。`;
+        }
     }
 
     // ==========================================
@@ -384,8 +448,11 @@
     function resetDetection() {
         restoreCleanImage();
         currentBoxes = [];
+        deletedBoxesHistory = [];
+        document.getElementById('btnUndoBox').disabled = true;
         isCalculated = false;
         calibArea.style.display = "none";
+        setBoxTapMode('select');
         if(originalImage) {
             statusText.innerText = "2. 「AIで一括検知」を実行してください";
             statusText.style.color = "#1565c0";
@@ -512,7 +579,8 @@
 
             currentBoxes.forEach(b => drawBox(b, '#9932CC'));
             calibArea.style.display = "block";
-            statusText.innerText = `✅ ${res.usedModel} で ${currentBoxes.length} 本検知しました。丸太の枠をタップしてください。`;
+            setBoxTapMode('select');
+            statusText.innerText = `✅ ${res.usedModel} で ${currentBoxes.length} 本検知しました。不要な枠は「枠消しゴム」で消去できます。`;
             statusText.style.color = "#2e7d32";
 
         } catch (error) {
@@ -527,7 +595,7 @@
     }
 
     // ==========================================
-    // ★ Roboflow 内蔵モデルでの検知（上限500本）
+    // Roboflow 内蔵モデルでの検知（上限500本）
     // ==========================================
     function applyRoboflowConfig() {
         if (!logModel) return;
@@ -604,7 +672,8 @@
 
             currentBoxes.forEach(b => drawBox(b, '#9932CC'));
             calibArea.style.display = "block";
-            statusText.innerText = `✅ AIで ${currentBoxes.length} 本検知しました。基準となる丸太の枠をタップしてください。`;
+            setBoxTapMode('select');
+            statusText.innerText = `✅ AIで ${currentBoxes.length} 本検知しました。不要な枠は「枠消しゴム」で消去できます。`;
             statusText.style.color = "#2e7d32";
 
         } catch (error) {
@@ -617,7 +686,7 @@
     }
 
     // ==========================================
-    // 描画・計算ロジック
+    // 描画・タップ判定（基準選択 / 消しゴム）ロジック
     // ==========================================
     function drawBox(box, color) {
         ctx.strokeStyle = color; 
@@ -639,20 +708,43 @@
         const clickX = (e.clientX - rect.left) * scaleX;
         const clickY = (e.clientY - rect.top) * scaleY;
         
-        let clickedBox = null;
-        for (let i = currentBoxes.length - 1; i >= 0; i--) {
-            let box = currentBoxes[i];
+        // タップ位置が含まれる枠のうち、中心座標が最も近い枠を選択（重なった小枠も狙いやすくする）
+        let clickedIndex = -1;
+        let minDistance = Infinity;
+        for (let i = 0; i < currentBoxes.length; i++) {
+            const box = currentBoxes[i];
             if (clickX >= box.x && clickX <= box.x + box.w && clickY >= box.y && clickY <= box.y + box.h) {
-                clickedBox = box;
-                break;
+                const cx = box.x + box.w / 2;
+                const cy = box.y + box.h / 2;
+                const dist = Math.hypot(clickX - cx, clickY - cy);
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    clickedIndex = i;
+                }
             }
         }
         
-        if (clickedBox) {
-            restoreCleanImage();
-            currentBoxes.forEach(b => drawBox(b, '#9932CC'));
-            drawBox(clickedBox, '#e65100'); 
-            setTimeout(() => openDiaModal(clickedBox), 50);
+        if (clickedIndex !== -1) {
+            if (boxTapMode === 'eraser') {
+                // ★ 枠消しゴムモード：タップした枠を削除して再描画
+                const removed = currentBoxes.splice(clickedIndex, 1)[0];
+                deletedBoxesHistory.push(removed);
+                document.getElementById('btnUndoBox').disabled = false;
+
+                restoreCleanImage();
+                currentBoxes.forEach(b => drawBox(b, '#9932CC'));
+
+                statusText.innerText = `⚪️ 1本消去しました（残り ${currentBoxes.length} 本）。続けてタップで消去できます。`;
+                statusText.style.color = "#d32f2f";
+                document.getElementById('calibMsg').innerHTML = `⚪️ <b>枠消しゴムモード中</b>（残り <b>${currentBoxes.length} 本</b>）<br>不要な枠を消去したら「👆 基準枠を選択」に戻してください。`;
+            } else {
+                // ★ 基準枠選択モード：選んだ枠をオレンジにして直径入力モーダルを開く
+                const clickedBox = currentBoxes[clickedIndex];
+                restoreCleanImage();
+                currentBoxes.forEach(b => drawBox(b, '#9932CC'));
+                drawBox(clickedBox, '#e65100'); 
+                setTimeout(() => openDiaModal(clickedBox), 50);
+            }
         }
     });
 
@@ -710,6 +802,7 @@
         renderTable();
         isCalculated = true; 
         calibArea.style.display = "none";
+        document.getElementById('btnUndoBox').disabled = true;
         
         showSavePreview(addedCount, addedVolume);
     }
