@@ -72,8 +72,22 @@
         .btn-teal { background: #00897b; } 
         .btn:disabled { background: #bdbdbd !important; cursor: not-allowed; }
 
-        .photo-buttons { display: flex; gap: 10px; margin-bottom: 10px; }
-        .photo-buttons label { flex: 1; margin-bottom: 0; }
+        /* ★ 改良：写真読込＋台形補正の3ボタン横並び */
+        .photo-buttons { display: flex; gap: 6px; margin-bottom: 10px; }
+        .photo-buttons label, .photo-buttons button { flex: 1; margin-bottom: 0; padding: 11px 4px; font-size: 0.84rem; white-space: nowrap; }
+        .btn-trapezoid { background: #5c6bc0; }
+        .btn-trapezoid.trap-active { background: #e65100; }
+
+        /* ★ 新設：台形補正スライダーパネル */
+        #trapezoid-controls { display: none; background: #ede7f6; border: 2px solid #9575cd; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+        .trap-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+        .trap-title { font-weight: bold; font-size: 0.88em; color: #4527a0; }
+        .trap-reset-btn { background: #7e57c2; color: white; border: none; border-radius: 14px; padding: 4px 10px; font-size: 0.78em; font-weight: bold; cursor: pointer; touch-action: manipulation; }
+        .trap-row { margin-bottom: 6px; }
+        .trap-row:last-child { margin-bottom: 0; }
+        .trap-label-row { display: flex; justify-content: space-between; font-size: 0.8em; font-weight: bold; color: #4527a0; margin-bottom: 2px; }
+        .trap-slider { width: 100%; margin: 2px 0; cursor: pointer; accent-color: #5c6bc0; }
+        .trap-scale-hints { display: flex; justify-content: space-between; font-size: 0.72em; color: #666; }
 
         #camera-container { position: relative; width: 100%; border-radius: 8px; overflow: hidden; background: #000; display: flex; justify-content: center; align-items: center; min-height: 250px; margin-bottom: 10px; }
         canvas { max-width: 100%; height: auto; display: block; margin: 0 auto; touch-action: manipulation; cursor: crosshair; transform-origin: center center; will-change: transform; }
@@ -86,7 +100,7 @@
         .tool-btn.undo-btn { flex: 0.65; background: #fff3e0; border-color: #ffb74d; color: #e65100; }
         .tool-btn.undo-btn:disabled { opacity: 0.4; cursor: not-allowed; background: #eee; border-color: #ccc; color: #999; }
 
-        /* ★ 新設：拡大・リセット・クリアの3ボタン行 */
+        /* 拡大・リセット・クリアの3ボタン行 */
         .sub-toolbar { display: flex; gap: 6px; margin-bottom: 10px; }
         .sub-btn { flex: 1; padding: 8px 4px; border: none; border-radius: 20px; font-weight: bold; font-size: 0.82em; color: white; cursor: pointer; user-select: none; touch-action: manipulation; text-align: center; }
         .sub-btn-zoom { background: #1976d2; }
@@ -94,7 +108,7 @@
         .sub-btn-reset { background: #d32f2f; }
         .sub-btn-clear { background: #6c757d; }
 
-        /* ★ 新設：拡大パネル（＋ － ← → ↑ ↓） */
+        /* 拡大パネル（＋ － ← → ↑ ↓） */
         #zoom-controls { display: none; gap: 5px; margin-bottom: 12px; padding: 8px; background: #e3f2fd; border: 1px solid #90caf9; border-radius: 8px; }
         .zoom-ctrl-btn { flex: 1; height: 42px; border: 1px solid #64b5f6; border-radius: 6px; background: #fff; color: #0d47a1; font-size: 1.15rem; font-weight: bold; cursor: pointer; user-select: none; -webkit-user-select: none; touch-action: manipulation; display: flex; align-items: center; justify-content: center; padding: 0; }
         .zoom-ctrl-btn:active { background: #bbdefb; transform: scale(0.96); }
@@ -121,6 +135,12 @@
         .length-quick-btn { flex: 1; padding: 7px 0; background: #fff; border: 1px solid #bcaaa4; border-radius: 5px; font-weight: bold; font-size: 0.85rem; color: #5d4037; cursor: pointer; }
         .length-quick-btn.active-len { background: #8d6e63; color: white; border-color: #5d4037; }
 
+        /* ★ 新設：２㎝括約チェックボックス用スタイル */
+        .round2cm-box { margin-top: 10px; padding: 9px 10px; background: #fff; border: 1px solid #ffab91; border-radius: 6px; }
+        .round2cm-label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: bold; font-size: 0.92em; color: #bf360c; margin: 0; }
+        .round2cm-checkbox { width: 18px; height: 18px; margin: 0; accent-color: #d84315; cursor: pointer; }
+        .round2cm-desc { display: block; font-size: 0.78em; font-weight: normal; color: #666; margin-top: 2px; padding-left: 26px; }
+
         .summary-box { display: flex; justify-content: space-between; background: #efebe9; padding: 10px; border-radius: 8px; margin: 20px 0 10px; font-weight: bold; color: #5d4037; }
         table { width: 100%; border-collapse: collapse; font-size: 12px; }
         th, td { border: 1px solid #d7ccc8; padding: 8px 4px; text-align: center; }
@@ -137,11 +157,11 @@
 
 <div class="card">
     <div class="header-area">
-        <h2>AI検知 Ver 7.1<span style="font-size:0.7em; color:#757575;"></span></h2>
+        <h2>AI検知 Ver 7.2<span style="font-size:0.7em; color:#757575;"></span></h2>
         <button class="settings-btn" onclick="openSettings()">⚙️ 設定</button>
     </div>
 
-    <!-- 静止画の撮影・選択 -->
+    <!-- ★ 改良：静止画の撮影・選択・台形補正 -->
     <div class="photo-buttons">
         <label class="btn btn-blue">
             📸 写真を撮る
@@ -151,6 +171,31 @@
             🖼️ 写真を選ぶ
             <input type="file" id="imageInputFile" accept="image/*" style="display: none;">
         </label>
+        <button type="button" class="btn btn-trapezoid" id="btnToggleTrapezoid" onclick="toggleTrapezoidMode()">📐 台形補正</button>
+    </div>
+
+    <!-- ★ 新設：台形補正スライダーパネル -->
+    <div id="trapezoid-controls">
+        <div class="trap-header">
+            <span class="trap-title">📐 台形補正（丸太が正面・真円に見える位置へ調整）</span>
+            <button type="button" class="trap-reset-btn" onclick="resetTrapezoid()">↺ リセット</button>
+        </div>
+        <div class="trap-row">
+            <div class="trap-label-row">
+                <span>↔️ 左右の傾き補正</span>
+                <span id="trapHVal">0</span>
+            </div>
+            <input type="range" id="trapHSlider" class="trap-slider" min="-50" max="50" step="1" value="0" oninput="onTrapezoidSliderInput()">
+            <div class="trap-scale-hints"><span>← 左を拡大</span><span>0</span><span>右を拡大 →</span></div>
+        </div>
+        <div class="trap-row">
+            <div class="trap-label-row">
+                <span>↕️ 上下の傾き補正</span>
+                <span id="trapVVal">0</span>
+            </div>
+            <input type="range" id="trapVSlider" class="trap-slider" min="-50" max="50" step="1" value="0" oninput="onTrapezoidSliderInput()">
+            <div class="trap-scale-hints"><span>↑ 上を拡大</span><span>0</span><span>下を拡大 ↓</span></div>
+        </div>
     </div>
 
     <div id="status-text" style="color: #d32f2f; font-weight: bold; margin-bottom: 10px; text-align: center;">
@@ -168,14 +213,14 @@
         <button class="tool-btn undo-btn" id="btnUndoBox" onclick="undoDeleteBox()" disabled>↩️ 戻す</button>
     </div>
 
-    <!-- ★ 2行目：拡大（戻す）・内訳リセット・枠クリア -->
+    <!-- 2行目：拡大（戻す）・内訳リセット・枠クリア -->
     <div class="sub-toolbar">
         <button class="sub-btn sub-btn-zoom" id="btnToggleZoom" onclick="toggleZoomMode()">🔍 拡大</button>
         <button class="sub-btn sub-btn-reset" onclick="handleAllClear()">🗑️ 内訳リセット</button>
         <button class="sub-btn sub-btn-clear" onclick="resetDetection()">🔄 枠全クリア</button>
     </div>
 
-    <!-- ★ 3行目：拡大操作パネル（拡大ボタンを押した時のみ表示） -->
+    <!-- 3行目：拡大操作パネル（拡大ボタンを押した時のみ表示） -->
     <div id="zoom-controls">
         <button type="button" class="zoom-ctrl-btn zoom-pm" onclick="adjustZoom(0.4)" aria-label="拡大">＋</button>
         <button type="button" class="zoom-ctrl-btn zoom-pm" onclick="adjustZoom(-0.4)" aria-label="縮小">－</button>
@@ -264,7 +309,7 @@
     </div>
 </div>
 
-<!-- 樹種・材長・基準直径を1画面で設定するポップアップモーダル -->
+<!-- 樹種・材長・基準直径・２㎝括約を1画面で設定するポップアップモーダル -->
 <div id="diameterModal" class="modal">
     <div class="modal-content">
         <h3 id="diaModalTitle" style="margin-top:0; margin-bottom:12px; color:#e65100;">一括設定 ＆ 基準サイズ入力</h3>
@@ -288,12 +333,21 @@
             </div>
         </div>
 
-        <!-- ステップ2：基準丸太の末口直径 -->
+        <!-- ステップ2：基準丸太の末口直径 ＋ ２㎝括約 -->
         <div class="modal-section-dia">
             <span class="modal-step-title" style="color:#d84315;">② タップした基準丸太の末口直径(cm)</span>
             <select id="diaSelect" style="margin-bottom:6px; font-size:1.2rem; font-weight:bold; padding:10px; width:100%; border-color:#ffab91;"></select>
             <div id="manualDiaDiv" style="display:none; margin-top:6px;">
                 <input type="number" id="manualDiaInput" placeholder="直径を手入力 (cm)" style="font-size:1.2rem; padding:10px; width:100%;">
+            </div>
+
+            <!-- ★ 新設：２㎝括約チェックボックス（デフォルトON） -->
+            <div class="round2cm-box">
+                <label class="round2cm-label">
+                    <input type="checkbox" id="round2cmCheck" class="round2cm-checkbox" checked>
+                    <span>２㎝括約（2cm単位で切り捨て）</span>
+                </label>
+                <span class="round2cm-desc">※短径（枠の縦横で短い方）から末口を算出します</span>
             </div>
         </div>
 
@@ -339,24 +393,31 @@
     const statusText = document.getElementById('status-text');
     const calibArea = document.getElementById('calibration-area');
     
-    let originalImage = null; 
+    let rawImageCanvas = null; // ★ 無加工の元画像を保持（台形補正の再計算用）
+    let tempWarpCanvas = null; // ★ 台形補正2パス目用の一時キャンバス
+    let originalImage = null;  // 台形補正適用後のクリーン画像（AI検知・描画ベース）
     let logModel = null; 
     let currentBoxes = []; 
-    let deletedBoxesHistory = []; // ★ 1操作（タップまたは1回のなぞり）ごとの削除枠配列を保持
+    let deletedBoxesHistory = [];
     let boxTapMode = 'select';    
     let isCalculated = false; 
     let selectedBoxForCalc = null;
     let previewDataUrl = null; 
     let resetModalCallback = null;
 
-    // ★ 拡大・移動（ズーム＆パン）制御変数
+    // ★ 台形補正制御変数
+    let isTrapezoidPanelOpen = false;
+    let trapH = 0; // -50〜+50（負:左を拡大 / 正:右を拡大）
+    let trapV = 0; // -50〜+50（負:上を拡大 / 正:下を拡大）
+
+    // 拡大・移動（ズーム＆パン）制御変数
     let isZoomPanelOpen = false;
     let zoomScale = 1.0;
     let panX = 0;
     let panY = 0;
     let panRepeatTimer = null;
 
-    // ★ なぞり消し・タップ判定用ポインタ制御変数
+    // なぞり消し・タップ判定用ポインタ制御変数
     let isPointerDown = false;
     let activePointerId = null;
     let pointerDownClientX = 0;
@@ -393,10 +454,209 @@
     }
 
     // ==========================================
-    // ★ 拡大・縮小・矢印移動ロジック
+    // ★ 台形補正（射影スライス変換）ロジック
+    // ==========================================
+    function toggleTrapezoidMode() {
+        if (!rawImageCanvas) return alert("先に写真を読み込んでください");
+        if (!isTrapezoidPanelOpen) {
+            resetZoom();
+            isTrapezoidPanelOpen = true;
+            document.getElementById('trapezoid-controls').style.display = 'block';
+            const btn = document.getElementById('btnToggleTrapezoid');
+            btn.innerText = "↩️ 戻る";
+            btn.classList.add('trap-active');
+
+            // 既に検知枠がある場合は、補正時にズレないよう案内しつつガイド表示
+            applyTrapezoidCorrection(true);
+            statusText.innerText = "📐 スライダーで台形補正を調整し、終わったら「↩️ 戻る」を押してください";
+            statusText.style.color = "#4527a0";
+        } else {
+            closeTrapezoidPanel();
+        }
+    }
+
+    function closeTrapezoidPanel() {
+        if (!isTrapezoidPanelOpen) return;
+        isTrapezoidPanelOpen = false;
+        document.getElementById('trapezoid-controls').style.display = 'none';
+        const btn = document.getElementById('btnToggleTrapezoid');
+        btn.innerText = "📐 台形補正";
+        btn.classList.remove('trap-active');
+
+        // ガイド線を消した補正済み画像を表示
+        restoreCleanImage();
+        if (currentBoxes.length > 0 && !isCalculated) {
+            currentBoxes.forEach(b => drawBox(b, '#9932CC'));
+        } else if (originalImage && !isCalculated) {
+            const label = (trapH !== 0 || trapV !== 0) ? `（補正済 左右:${trapH} / 上下:${trapV}）` : "";
+            statusText.innerText = `2. 「AIで一括検知」を実行してください ${label}`;
+            statusText.style.color = "#1565c0";
+        }
+    }
+
+    function resetTrapezoid() {
+        trapH = 0;
+        trapV = 0;
+        document.getElementById('trapHSlider').value = 0;
+        document.getElementById('trapVSlider').value = 0;
+        document.getElementById('trapHVal').innerText = "0";
+        document.getElementById('trapVVal').innerText = "0";
+        if (rawImageCanvas) {
+            clearBoxesForTrapezoid();
+            applyTrapezoidCorrection(isTrapezoidPanelOpen);
+        }
+    }
+
+    function onTrapezoidSliderInput() {
+        if (!rawImageCanvas) return;
+        trapH = parseInt(document.getElementById('trapHSlider').value, 10) || 0;
+        trapV = parseInt(document.getElementById('trapVSlider').value, 10) || 0;
+        document.getElementById('trapHVal').innerText = (trapH > 0 ? `+${trapH}` : `${trapH}`);
+        document.getElementById('trapVVal').innerText = (trapV > 0 ? `+${trapV}` : `${trapV}`);
+
+        clearBoxesForTrapezoid();
+        applyTrapezoidCorrection(true);
+    }
+
+    function clearBoxesForTrapezoid() {
+        if (currentBoxes.length > 0 || isCalculated) {
+            currentBoxes = [];
+            deletedBoxesHistory = [];
+            currentEraseStroke = [];
+            document.getElementById('btnUndoBox').disabled = true;
+            isCalculated = false;
+            calibArea.style.display = "none";
+            setBoxTapMode('select');
+        }
+    }
+
+    // 厳密な1軸射影変換（横方向）：遠近で縮んだ側の縦と横を同時に引き伸ばす
+    function warpHorizontalPerspective(srcCanvas, dstCtx, w, h, amount) {
+        dstCtx.fillStyle = '#000';
+        dstCtx.fillRect(0, 0, w, h);
+
+        if (amount === 0) {
+            dstCtx.drawImage(srcCanvas, 0, 0);
+            return;
+        }
+
+        // amount > 0: 右側を拡大（左端を1/rに縮小、右端を1.0）
+        // amount < 0: 左側を拡大（左端を1.0、右端を1/rに縮小）
+        const r = 1 + Math.abs(amount) * 0.016; // 最大1.8倍の遠近補正
+        const s0 = amount > 0 ? (1 / r) : 1.0;
+        const s1 = amount > 0 ? 1.0 : (1 / r);
+
+        const step = 2; // 2px刻みの高精細スライス
+        for (let dx = 0; dx < w; dx += step) {
+            const t0 = dx / w;
+            const t1 = Math.min(1, (dx + step) / w);
+            const tm = (t0 + t1) / 2;
+
+            // 射影変換による元画像上の対応X座標（横方向も距離に応じて非線形に伸長）
+            const u0 = (t0 * s1) / (s0 + (s1 - s0) * t0);
+            const u1 = (t1 * s1) / (s0 + (s1 - s0) * t1);
+
+            const sx = u0 * w;
+            const sw = Math.max(0.5, (u1 - u0) * w);
+
+            // 縦方向スケールは出力Xに対して線形に変化
+            const scaleY = s0 + (s1 - s0) * tm;
+            const dh = h * scaleY;
+            const dy = (h - dh) / 2;
+
+            dstCtx.drawImage(srcCanvas, sx, 0, sw, h, dx, dy, step + 0.5, dh);
+        }
+    }
+
+    // 厳密な1軸射影変換（縦方向）：見上げ・見下ろしの遠近歪みを補正
+    function warpVerticalPerspective(srcCanvas, dstCtx, w, h, amount) {
+        dstCtx.fillStyle = '#000';
+        dstCtx.fillRect(0, 0, w, h);
+
+        if (amount === 0) {
+            dstCtx.drawImage(srcCanvas, 0, 0);
+            return;
+        }
+
+        // amount < 0: 上側を拡大（上端を1.0、下端を1/rに縮小）
+        // amount > 0: 下側を拡大（上端を1/rに縮小、下端を1.0）
+        const r = 1 + Math.abs(amount) * 0.016;
+        const s0 = amount > 0 ? (1 / r) : 1.0;
+        const s1 = amount > 0 ? 1.0 : (1 / r);
+
+        const step = 2;
+        for (let dy = 0; dy < h; dy += step) {
+            const t0 = dy / h;
+            const t1 = Math.min(1, (dy + step) / h);
+            const tm = (t0 + t1) / 2;
+
+            const v0 = (t0 * s1) / (s0 + (s1 - s0) * t0);
+            const v1 = (t1 * s1) / (s0 + (s1 - s0) * t1);
+
+            const sy = v0 * h;
+            const sh = Math.max(0.5, (v1 - v0) * h);
+
+            const scaleX = s0 + (s1 - s0) * tm;
+            const dw = w * scaleX;
+            const dx = (w - dw) / 2;
+
+            dstCtx.drawImage(srcCanvas, 0, sy, w, sh, dx, dy, dw, step + 0.5);
+        }
+    }
+
+    function applyTrapezoidCorrection(showGuide) {
+        if (!rawImageCanvas) return;
+        const w = canvas.width;
+        const h = canvas.height;
+
+        if (!tempWarpCanvas) {
+            tempWarpCanvas = document.createElement('canvas');
+        }
+        tempWarpCanvas.width = w;
+        tempWarpCanvas.height = h;
+        const tempCtx = tempWarpCanvas.getContext('2d');
+
+        // 1パス目：左右台形補正 → tempWarpCanvas
+        warpHorizontalPerspective(rawImageCanvas, tempCtx, w, h, trapH);
+        // 2パス目：上下台形補正 → メインキャンバス
+        warpVerticalPerspective(tempWarpCanvas, ctx, w, h, trapV);
+
+        // ガイド線を引く前のクリーン画像をAI検知・描画ベースとして保存
+        originalImage = ctx.getImageData(0, 0, w, h);
+
+        if (showGuide) {
+            drawTrapezoidGuide(w, h);
+        }
+    }
+
+    function drawTrapezoidGuide(w, h) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(0, 229, 255, 0.55)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([6, 6]);
+        for (let i = 1; i <= 3; i++) {
+            const gx = Math.round((w * i) / 4);
+            const gy = Math.round((h * i) / 4);
+            ctx.beginPath();
+            ctx.moveTo(gx, 0);
+            ctx.lineTo(gx, h);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(0, gy);
+            ctx.lineTo(w, gy);
+            ctx.stroke();
+        }
+        ctx.restore();
+    }
+
+    // ==========================================
+    // 拡大・縮小・矢印移動ロジック
     // ==========================================
     function toggleZoomMode() {
         if (!originalImage) return alert("先に写真を読み込んでください");
+        if (isTrapezoidPanelOpen) closeTrapezoidPanel();
+
         if (!isZoomPanelOpen) {
             isZoomPanelOpen = true;
             zoomScale = 1.8;
@@ -439,7 +699,6 @@
         const stepX = Math.max(36, baseW * 0.16);
         const stepY = Math.max(36, baseH * 0.16);
 
-        // 矢印の方向を見に行く（例：→を押すと写真の右側を見る＝画像を左へスライド）
         if (direction === 'left')  panX += stepX;
         if (direction === 'right') panX -= stepX;
         if (direction === 'up')    panY += stepY;
@@ -507,11 +766,12 @@
         });
     }
 
-    function saveLastParams(treeType, length, diaSelectVal) {
+    function saveLastParams(treeType, length, diaSelectVal, useRound2cm) {
         localStorage.setItem(LAST_PARAMS_KEY, JSON.stringify({
             tree: treeType,
             length: length,
-            dia: diaSelectVal
+            dia: diaSelectVal,
+            round2cm: useRound2cm
         }));
     }
 
@@ -530,6 +790,9 @@
             if (saved.dia && saved.dia !== 'manual') {
                 document.getElementById('diaSelect').value = saved.dia;
             }
+            if (typeof saved.round2cm === 'boolean') {
+                document.getElementById('round2cmCheck').checked = saved.round2cm;
+            }
         } catch (e) {
             console.log('Param load skip', e);
         }
@@ -546,7 +809,7 @@
         if (mode === 'eraser') {
             btnSelect.classList.remove('active-select');
             btnEraser.classList.add('active-eraser');
-            canvas.style.touchAction = 'none'; // ★ なぞり消し時にページスクロールを防止
+            canvas.style.touchAction = 'none';
             if (currentBoxes.length > 0 && !isCalculated) {
                 statusText.innerText = `⚪️ 消しゴムモード（残り ${currentBoxes.length} 本）：タップまたは指でなぞって消去できます`;
                 statusText.style.color = "#d32f2f";
@@ -640,11 +903,35 @@
                 }
                 canvas.width = width;
                 canvas.height = height;
-                ctx.drawImage(img, 0, 0, width, height);
+
+                // 無加工元画像をオフスクリーンキャンバスへ保持
+                if (!rawImageCanvas) {
+                    rawImageCanvas = document.createElement('canvas');
+                }
+                rawImageCanvas.width = width;
+                rawImageCanvas.height = height;
+                rawImageCanvas.getContext('2d').drawImage(img, 0, 0, width, height);
+
+                // 台形補正スライダーを初期化して閉じる
+                trapH = 0;
+                trapV = 0;
+                document.getElementById('trapHSlider').value = 0;
+                document.getElementById('trapVSlider').value = 0;
+                document.getElementById('trapHVal').innerText = "0";
+                document.getElementById('trapVVal').innerText = "0";
+                if (isTrapezoidPanelOpen) {
+                    isTrapezoidPanelOpen = false;
+                    document.getElementById('trapezoid-controls').style.display = 'none';
+                    const trapBtn = document.getElementById('btnToggleTrapezoid');
+                    trapBtn.innerText = "📐 台形補正";
+                    trapBtn.classList.remove('trap-active');
+                }
+
+                ctx.drawImage(rawImageCanvas, 0, 0);
                 originalImage = ctx.getImageData(0, 0, width, height);
                 
                 resetDetection(); 
-                statusText.innerText = "2. 「AIで一括検知」を実行してください";
+                statusText.innerText = "2. 必要に応じて「📐 台形補正」を行い、「AIで一括検知」を実行してください";
                 statusText.style.color = "#1565c0";
 
                 await askResetIfNeeded();
@@ -746,6 +1033,7 @@
         if (!apiKey) return alert("Gemini APIキーを入力してください");
         
         localStorage.setItem('gemini_api_key_ai', apiKey);
+        if (isTrapezoidPanelOpen) closeTrapezoidPanel();
 
         await askResetIfNeeded();
         
@@ -857,6 +1145,7 @@
 
     async function runRoboflowDetection() {
         if (!originalImage) return alert("先に写真を読み込んでください");
+        if (isTrapezoidPanelOpen) closeTrapezoidPanel();
 
         await askResetIfNeeded();
 
@@ -920,7 +1209,6 @@
         ctx.fillText(box.text, box.x + 2, box.y - 5);
     }
 
-    // 拡大・移動中も正確に元画像のピクセル座標へ逆変換
     function getCanvasCoordsFromClient(clientX, clientY) {
         const rect = canvas.getBoundingClientRect();
         const scaleX = canvas.width / rect.width;
@@ -949,7 +1237,6 @@
         return clickedIndex;
     }
 
-    // ★ なぞり軌跡（線分）に触れた枠をまとめて消去
     function eraseBoxesAlongSegment(x1, y1, x2, y2, singleTargetOnly) {
         if (currentBoxes.length === 0) return 0;
 
@@ -972,7 +1259,6 @@
             const px = x1 + (x2 - x1) * t;
             const py = y1 + (y2 - y1) * t;
 
-            // 逆順ループで触れた枠を消去
             for (let i = currentBoxes.length - 1; i >= 0; i--) {
                 const box = currentBoxes[i];
                 if (px >= box.x && px <= box.x + box.w && py >= box.y && py <= box.y + box.h) {
@@ -994,7 +1280,7 @@
     }
 
     canvas.addEventListener('pointerdown', (e) => {
-        if (currentBoxes.length === 0 || isCalculated) return;
+        if (currentBoxes.length === 0 || isCalculated || isTrapezoidPanelOpen) return;
         if (e.button !== undefined && e.button !== 0 && e.pointerType === 'mouse') return;
 
         isPointerDown = true;
@@ -1018,7 +1304,7 @@
 
     canvas.addEventListener('pointermove', (e) => {
         if (!isPointerDown || e.pointerId !== activePointerId) return;
-        if (boxTapMode !== 'eraser' || isCalculated) return;
+        if (boxTapMode !== 'eraser' || isCalculated || isTrapezoidPanelOpen) return;
 
         e.preventDefault();
         const pos = getCanvasCoordsFromClient(e.clientX, e.clientY);
@@ -1093,14 +1379,17 @@
             return;
         }
 
-        saveLastParams(treeType, lengthVal, selectVal);
+        const useRound2cm = document.getElementById('round2cmCheck').checked;
+        saveLastParams(treeType, lengthVal, selectVal, useRound2cm);
         document.getElementById('diameterModal').style.display = 'none';
-        calculateAllLogs(selectedBoxForCalc, realSizeCm, treeType, lengthVal);
+        calculateAllLogs(selectedBoxForCalc, realSizeCm, treeType, lengthVal, useRound2cm);
     }
 
-    function calculateAllLogs(baseBox, realSizeCm, treeType, length) {
-        resetZoom(); // 結果全体が見やすいよう拡大を等倍へ戻す
-        const pxPerCm = baseBox.w / realSizeCm;
+    // ★ 改良：短径（枠の縦横で短い方）＋ ２㎝括約（切り捨て）対応
+    function calculateAllLogs(baseBox, realSizeCm, treeType, length, useRound2cm) {
+        resetZoom();
+        const baseShortPx = Math.min(baseBox.w, baseBox.h);
+        const pxPerCm = baseShortPx / realSizeCm;
         
         let addedCount = 0;
         let addedVolume = 0; 
@@ -1110,7 +1399,16 @@
         restoreCleanImage(); 
 
         currentBoxes.forEach(box => {
-            let estDia = Math.max(1, Math.round(box.w / pxPerCm));
+            const boxShortPx = Math.min(box.w, box.h);
+            const rawDia = boxShortPx / pxPerCm;
+            let estDia;
+            if (useRound2cm) {
+                // 2cm括約（2cm単位切り捨て）。浮動小数点誤差で基準丸太が下がらないよう微小値を加算
+                estDia = rawDia < 2 ? 1 : Math.floor((rawDia + 1e-6) / 2) * 2;
+            } else {
+                estDia = Math.max(1, Math.round(rawDia));
+            }
+
             let vol = calculateVolume(estDia, length);
             list.unshift({ id: Date.now() + Math.random(), tree: treeType, length: length, diameter: estDia, volume: vol, memo: 'AI推定' });
             
