@@ -1,71 +1,54 @@
-const CACHE_NAME = 'timber-measur-byAI_v7.3.1';
-const urlsToCache = [
-  './',
-  'index.html',
-  'manifest.json',
-  'sw.js',
-  'icon-512.png',
-  'roboflow.js',
-  'model.json',
-  'group1-shard1of3.bin',
-  'group1-shard2of3.bin',
-  'group1-shard3of3.bin'
+const CACHE_NAME = 'ai-log-detect-v8.0-onnx';
+const PRECACHE_URLS = [
+    './',
+    './index.html',
+    './manifest.json',
+    './icon-512.png',
+    './weights.onnx',
+    'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.wasm.min.js'
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(urlsToCache);
-    })
-  );
-  self.skipWaiting();
+    self.skipWaiting();
+    event.waitUntil(
+        caches.open(CACHE_NAME).then((cache) => {
+            return Promise.allSettled(
+                PRECACHE_URLS.map((url) => cache.add(url))
+            );
+        })
+    );
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
-  );
-  return self.clients.claim();
+    event.waitUntil(
+        caches.keys().then((keys) => {
+            return Promise.all(
+                keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+            );
+        }).then(() => self.clients.claim())
+    );
 });
 
 self.addEventListener('fetch', (event) => {
-  const reqUrl = event.request.url;
+    if (event.request.method !== 'GET') return;
 
-  // 1. 認識モデル関連ファイル（roboflow.js / model.json / .bin）はキャッシュ優先で即座に返す
-  const isModelAsset =
-    reqUrl.endsWith('roboflow.js') ||
-    reqUrl.endsWith('model.json') ||
-    reqUrl.includes('my-first-project-bjosg/40') ||
-    /group1-shard\d+of\d+\.bin/.test(reqUrl);
+    const url = new URL(event.request.url);
+    const isSameOrigin = (url.origin === self.location.origin);
+    const isOrtCdn = url.href.startsWith('https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/');
 
-  if (isModelAsset) {
-    event.respondWith(
-      caches.match(event.request, { ignoreSearch: true }).then((cachedResponse) => {
-        if (cachedResponse) {
-          return cachedResponse;
-        }
-        // 万が一URL変換前のリクエストが来た場合も model.json のキャッシュを返す
-        if (reqUrl.includes('my-first-project-bjosg/40')) {
-          return caches.match('model.json');
-        }
-        return fetch(event.request);
-      })
-    );
-    return;
-  }
-
-  // 2. HTML等のアプリ本体はネットワーク優先（オフライン時はキャッシュを返す）
-  event.respondWith(
-    fetch(event.request).catch(() => {
-      return caches.match(event.request, { ignoreSearch: true });
-    })
-  );
+    // 同一オリジン（HTML/ONNX等）および ONNX Runtime Web の WASM ファイルはキャッシュ優先
+    if (isSameOrigin || isOrtCdn) {
+        event.respondWith(
+            caches.match(event.request).then((cached) => {
+                if (cached) return cached;
+                return fetch(event.request).then((response) => {
+                    if (response && (response.status === 200 || response.type === 'opaque')) {
+                        const copy = response.clone();
+                        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+                    }
+                    return response;
+                });
+            })
+        );
+    }
 });
