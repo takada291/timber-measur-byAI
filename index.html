@@ -75,8 +75,9 @@
         .photo-buttons { display: flex; gap: 10px; margin-bottom: 10px; }
         .photo-buttons label { flex: 1; margin-bottom: 0; }
 
-        #camera-container { position: relative; width: 100%; border-radius: 8px; overflow: hidden; background: #000; display: flex; justify-content: center; align-items: center; min-height: 250px; margin-bottom: 10px; }
-        canvas { max-width: 100%; height: auto; display: block; margin: 0 auto; touch-action: manipulation; cursor: crosshair; transform-origin: center center; will-change: transform; }
+        /* ★ iOS Safariでのボケ対策：will-change: transformを削除し、シンプルな表示構成に整理 */
+        #camera-container { position: relative; width: 100%; border-radius: 8px; overflow: hidden; background: #000; text-align: center; min-height: 220px; margin-bottom: 10px; }
+        canvas { max-width: 100%; height: auto; display: block; margin: 0 auto; touch-action: manipulation; cursor: crosshair; transform-origin: center center; }
 
         /* 選択モード・枠消しゴム切り替えツールバー */
         .toolbar { display: flex; gap: 6px; margin-bottom: 8px; }
@@ -143,7 +144,7 @@
 
 <div class="card">
     <div class="header-area">
-        <h2>AI検知 Ver 7.2<span style="font-size:0.7em; color:#757575;"></span></h2>
+        <h2>AI検知 Ver 7.3<span style="font-size:0.7em; color:#757575;"></span></h2>
         <button class="settings-btn" onclick="openSettings()">⚙️ 設定</button>
     </div>
 
@@ -656,10 +657,20 @@
                     height = Math.floor(height * (maxWidth / width));
                     width = maxWidth;
                 }
+                resetZoom();
                 canvas.width = width;
                 canvas.height = height;
+                document.getElementById('camera-container').style.minHeight = 'auto';
+
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
                 ctx.drawImage(img, 0, 0, width, height);
                 originalImage = ctx.getImageData(0, 0, width, height);
+
+                // ★ iOS Safariで縦持ち読込時に描画バッファを確実に最新解像度へ更新
+                canvas.style.display = 'none';
+                void canvas.offsetHeight;
+                canvas.style.display = 'block';
                 
                 resetDetection(); 
                 statusText.innerText = "2. 「AIで一括検知」を実行してください";
