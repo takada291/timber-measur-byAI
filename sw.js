@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ai-log-detect-v8.0.1-onnx';
+const CACHE_NAME = 'ai-log-detect-v8.0.2-onnx';
 const PRECACHE_URLS = [
     './',
     './index.html',
