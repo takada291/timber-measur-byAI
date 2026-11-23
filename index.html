@@ -865,7 +865,7 @@
         const btn = document.getElementById('btnLoadModel');
         btn.disabled = true;
         btn.innerText = "⏳ 内蔵モデル読込中...";
-        statusText.innerText = "リポジトリ内の認識モデルを読み込んでいます...";
+        statusText.innerText = "認識モデルを読み込んでいます...";
         
         try {
             const rf = await window.roboflow.auth({ publishable_key: API_KEY });
