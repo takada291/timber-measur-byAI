@@ -174,9 +174,9 @@
         <button class="btn btn-purple" id="btnRunGemini" onclick="runGeminiDetection()" style="margin-bottom: 0;">✨ Geminiで一括検知</button>
     </div>
 
-    <!-- ローカルONNX検知（完全オフライン・APIキー不要・上限500本） -->
+    <!-- ローカルONNX検知（完全オフライン・APIキー不要・上限1000本） -->
     <div class="control-group" style="background: #e8f5e9; border-color: #81c784;">
-        <label class="control-label" style="color: #2e7d32;">🧠 AI丸太検知（オフライン高速・最大500本）</label>
+        <label class="control-label" style="color: #2e7d32;">🧠 AI丸太検知（オフライン高速・最大1000本）</label>
         <button class="btn btn-teal" id="btnLoadModel" onclick="loadOnnxModel()" style="margin-bottom: 10px;">📥 認識モデル読込（事前キャッシュ用）</button>
         <div class="input-row" style="margin-bottom: 10px;">
             <label style="color: #2e7d32;">🎯 検出感度</label>
@@ -308,7 +308,7 @@
     const ONNX_MODEL_URL = './weights.onnx';
     const MODEL_INPUT_SIZE = 640;
     const IOU_THRESHOLD = 0.50;
-    const MAX_OBJECTS = 500;
+    const MAX_OBJECTS = 1000;
     const ORT_WASM_CDN = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/';
 
     // Gemini機能（非表示のまま温存）
@@ -818,7 +818,7 @@
     }
 
     // ==========================================
-    // ONNX Runtime Web ローカル推論エンジン（YOLOv8n / 上限500本）
+    // ONNX Runtime Web ローカル推論エンジン（YOLOv8n / 上限1000本）
     // ==========================================
     async function ensureOnnxSession() {
         if (ortSession) return ortSession;
@@ -850,9 +850,9 @@
             await ensureOnnxSession();
             const sec = ((performance.now() - t0) / 1000).toFixed(2);
             
-            btn.innerText = "✅ 認識モデル準備完了 (上限500本)";
+            btn.innerText = "✅ 認識モデル準備完了 (上限1000本)";
             btn.style.background = "#388e3c"; 
-            statusText.innerText = `認識モデルの準備が完了しました（${sec}秒）。オフラインでも最大500本まで検知可能です。`;
+            statusText.innerText = `認識モデルの準備が完了しました（${sec}秒）。オフラインでも最大1000本まで検知可能です。`;
             statusText.style.color = "#2e7d32";
         } catch (error) {
             console.error(error);
@@ -1011,7 +1011,7 @@
             if (!ortSession) {
                 await ensureOnnxSession();
                 const loadBtn = document.getElementById('btnLoadModel');
-                loadBtn.innerText = "✅ 認識モデル準備完了 (上限500本)";
+                loadBtn.innerText = "✅ 認識モデル準備完了 (上限1000本)";
                 loadBtn.style.background = "#388e3c";
                 loadBtn.disabled = true;
             }
